@@ -1,46 +1,103 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sentient Mosaic</title>
-  <style>
-    body { margin:0; background:#0b0b0f; color:#e5e7eb; font-family:Arial, sans-serif; text-align:center; }
-    h1 { margin:20px 0; font-size:28px; font-weight:700; }
-    .toolbar { margin:10px; }
-    #mosaic { display:grid; margin:0 auto; cursor:pointer; }
-    .cell { width:16px; height:16px; background:#fff; }
-    .taken { outline:1px solid #000; background-size:cover; background-position:center; }
-    .masked { background:#000; }
-    .controls { margin:12px; }
-    input, button { padding:6px 10px; margin:4px; border-radius:6px; border:none; }
-    button { background:#4f46e5; color:#fff; cursor:pointer; }
-    button:hover { background:#6366f1; }
-    .zoom { margin: 6px; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentient Mosaic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b0f; --card:#14141b; --muted:#9aa3b2; --text:#e5e7eb;
+    --primary:#4f46e5; --primary-2:#6366f1; --accent:#22c55e; --danger:#ef4444; --ink:#0f1117;
+    --grid:#1f2533; --grid2:#2a3345;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
+  .wrap{max-width:1200px;margin:26px auto 50px;padding:0 16px}
+  h1{font-size:34px;margin:0 0 6px;text-align:center;font-weight:800}
+  .sub{opacity:.8;text-align:center;margin:0 0 18px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:14px}
+  input[type="text"], textarea{background:var(--ink);border:1px solid var(--grid);color:var(--text);border-radius:10px;padding:10px 12px;outline:none}
+  input[type="text"]{width:220px}
+  textarea{width:360px;min-height:42px;resize:vertical}
+  input[type="file"]{color:var(--muted)}
+  button{background:var(--primary);border:0;color:#fff;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+  button:hover{background:var(--primary-2)}
+  .btn-ghost{background:#0f1117;border:1px solid var(--grid);color:var(--text)}
+  .muted{color:var(--muted)}
+  .ok{color:var(--accent);font-weight:700}
+  .warn{color:var(--danger);font-weight:700}
+
+  /* Board + zoom/pan */
+  .board-wrap{background:#fff;border-radius:16px;border:1px solid var(--grid);padding:12px}
+  .toolbar{display:flex;gap:8px;justify-content:flex-end;margin:0 0 8px}
+  .board-viewport{position:relative;background:#fff;border:1px dashed var(--grid2);border-radius:12px;overflow:hidden;height:min(75vh,900px);touch-action:none}
+  .board{position:absolute;left:0;top:0;transform-origin:0 0;image-rendering:pixelated;user-select:none}
+  .grid{display:grid;gap:1px;background:var(--grid2)}
+  .cell{width:18px;height:18px;background:#fff;position:relative}
+  .cell.blocked{background:#f3f4f6}
+  .cell.free:hover{outline:2px solid #f59e0b;outline-offset:-2px;cursor:pointer}
+  .cell.claimed{background:#e2e8f0}
+  .cell img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:2px}
+  .tip{position:absolute;left:50%;bottom:100%;transform:translate(-50%,-6px);background:#111827;color:#fff;padding:6px 8px;border-radius:8px;white-space:nowrap;font-size:12px;display:none;border:1px solid #374151}
+  .cell:hover .tip{display:block;pointer-events:none}
+
+  .legend{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:10px}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid var(--grid2)}
+  .d1{background:#fff}.d2{background:#f3f4f6}.d3{background:#e2e8f0}
+</style>
 </head>
 <body>
-  <h1>Sentient Mosaic</h1>
-  <div class="toolbar">
-    <input type="text" id="username" placeholder="Kullanıcı adınız (Twitter)"/>
-    <input type="file" id="file" accept="image/*"/>
-    <button id="claimBtn">Pixel Seç & Yükle</button>
-  </div>
-  <div class="controls">
-    <button class="zoom" onclick="zoom(1.2)">🔍 +</button>
-    <button class="zoom" onclick="zoom(0.8)">🔍 −</button>
-  </div>
-  <div id="mosaic"></div>
+  <div class="wrap">
+    <h1>Sentient Mosaic</h1>
+    <p class="sub">Topluluk profillerinden piksel mozaik 🧩 – <span id="openState" class="ok">Açık</span></p>
 
-  <!-- Firebase -->
+    <!-- Form -->
+    <div class="row">
+      <input id="username" type="text" placeholder="Twitter kullanıcı adın" />
+      <input id="file" type="file" accept="image/png, image/jpeg" />
+      <textarea id="note" maxlength="120" placeholder="Dobby'e notun (120 karakter)"></textarea>
+      <button id="claimBtn">Seçilen hücreye yerleştir</button>
+      <button id="clearSel" class="btn-ghost">Seçimi temizle</button>
+    </div>
+    <p class="sub muted" id="hint">Bir hücre seçmek için mozaikte boş (açık) alana tıklayın. (Her kullanıcı en fazla 1 hücre alabilir)</p>
+
+    <!-- Board -->
+    <div class="board-wrap">
+      <div class="toolbar">
+        <button id="zoomIn">＋</button>
+        <button id="zoomOut">－</button>
+        <button id="zoomReset" class="btn-ghost">%100</button>
+      </div>
+      <div class="board-viewport" id="viewport">
+        <div id="board" class="board">
+          <div id="grid" class="grid"></div>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="muted">Açıklama:</span>
+        <span><i class="dot d1"></i> Seçilebilir</span>
+        <span><i class="dot d2"></i> Kapalı (logo dışı)</span>
+        <span><i class="dot d3"></i> Dolu</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase v10 CDN -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+    import {
+      getFirestore, collection, doc, getDoc, getDocs, query, where, onSnapshot,
+      setDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+      getStorage, ref as sRef, uploadBytes, getDownloadURL
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-    // 🔑 Doğru Firebase config
+    /* === Firebase Config (seninki) === */
     const firebaseConfig = {
-      apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb30E",
+      apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb3OE",
       authDomain: "sentient-mosaic.firebaseapp.com",
       projectId: "sentient-mosaic",
       storageBucket: "sentient-mosaic.firebasestorage.app",
@@ -50,101 +107,267 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const st = getStorage(app);
+    const db  = getFirestore(app);
+    const stg = getStorage(app);
 
-    let CFG = {};
-    let grid = [];
-    let scale = 1;
+    /* === Elements === */
+    const els = {
+      openState:  document.getElementById('openState'),
+      username:   document.getElementById('username'),
+      file:       document.getElementById('file'),
+      note:       document.getElementById('note'),
+      claimBtn:   document.getElementById('claimBtn'),
+      clearSel:   document.getElementById('clearSel'),
+      viewport:   document.getElementById('viewport'),
+      board:      document.getElementById('board'),
+      grid:       document.getElementById('grid'),
+      zoomIn:     document.getElementById('zoomIn'),
+      zoomOut:    document.getElementById('zoomOut'),
+      zoomReset:  document.getElementById('zoomReset'),
+      hint:       document.getElementById('hint'),
+    };
 
+    /* === Global state === */
+    let CFG = {
+      gridCols: 40, gridRows: 40, cellPx: 16,
+      mosaicOpen: true, maxClaimPerUser: 1, logoMaskUrl: ""
+    };
+    let scale = 1, pan = {x:0,y:0}, dragging = false, dragStart={x:0,y:0}, panStart={x:0,y:0};
+    let selected = null; // {r,c}
+    let blocked = new Set(); // "r_c" (logo dışı)
+    let claimed = new Map(); // "r_c" -> {username, avatarUrl, note}
+
+    function id(r,c){ return `${r}_${c}`; }
+
+    /* === Load config === */
     async function loadConfig(){
-      const snap = await getDoc(doc(db,"settings","config"));
-      if(snap.exists()){
-        CFG = snap.data();
-        buildGrid();
-      } else {
-        alert("Config bulunamadı!");
-      }
+      const snap = await getDoc(doc(db,'settings','config'));
+      if(!snap.exists()) return;
+      const d = snap.data();
+      CFG.gridCols = d.gridCols ?? CFG.gridCols;
+      CFG.gridRows = d.gridRows ?? CFG.gridRows;
+      CFG.cellPx   = d.cellPx   ?? CFG.cellPx;
+      CFG.mosaicOpen = !!d.mosaicOpen;
+      CFG.maxClaimPerUser = d.maxClaimPerUser ?? 1;
+      CFG.logoMaskUrl = d.logoMaskUrl || "";
+      els.openState.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
+      els.openState.className = CFG.mosaicOpen ? "ok" : "warn";
     }
 
+    /* === Build grid DOM === */
     function buildGrid(){
-      const gridEl = document.getElementById("mosaic");
-      gridEl.style.gridTemplateColumns = `repeat(${CFG.gridCols}, ${CFG.cellPx}px)`;
-      gridEl.style.width = (CFG.gridCols*CFG.cellPx)+"px";
-      gridEl.style.transform = `scale(${scale})`;
-      gridEl.innerHTML="";
+      els.grid.style.gridTemplateColumns = `repeat(${CFG.gridCols}, ${CFG.cellPx}px)`;
+      els.grid.style.gridTemplateRows    = `repeat(${CFG.gridRows}, ${CFG.cellPx}px)`;
+
+      els.grid.innerHTML = "";
       for(let r=0;r<CFG.gridRows;r++){
         for(let c=0;c<CFG.gridCols;c++){
-          const cell=document.createElement("div");
-          cell.className="cell";
-          cell.dataset.rc=`${r}-${c}`;
-          cell.addEventListener("click",()=>selectCell(cell));
-          gridEl.appendChild(cell);
-          grid.push(cell);
+          const d = document.createElement('div');
+          d.className = 'cell blocked';
+          d.dataset.r = r; d.dataset.c = c;
+          d.addEventListener('click', onCellClick);
+          els.grid.appendChild(d);
         }
       }
-      // Mask resmi uygula
-      const maskImg = new Image();
-      maskImg.crossOrigin="anonymous";
-      maskImg.onload=()=>{
-        const canvas=document.createElement("canvas");
-        canvas.width=CFG.gridCols; canvas.height=CFG.gridRows;
-        const ctx=canvas.getContext("2d");
-        ctx.drawImage(maskImg,0,0,CFG.gridCols,CFG.gridRows);
-        const data=ctx.getImageData(0,0,CFG.gridCols,CFG.gridRows).data;
-        for(let r=0;r<CFG.gridRows;r++){
-          for(let c=0;c<CFG.gridCols;c++){
-            const idx=(r*CFG.gridCols+c)*4;
-            if(data[idx]<128){ // siyah alan
-              grid[r*CFG.gridCols+c].classList.add("masked");
-            }
+      fitBoard();
+    }
+
+    function fitBoard(){
+      const w = CFG.gridCols*CFG.cellPx + 2;
+      const h = CFG.gridRows*CFG.cellPx + 2;
+      els.board.style.width = `${w}px`;
+      els.board.style.height= `${h}px`;
+      applyTransform();
+    }
+
+    function applyTransform(){
+      els.board.style.transform = `translate(${pan.x}px,${pan.y}px) scale(${scale})`;
+    }
+
+    /* === Mask (logo) yükle ve seçilebilir alanları hesapla === */
+    async function loadMask(){
+      blocked.clear();
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = CFG.logoMaskUrl;
+      await img.decode();
+
+      // Mask’ı, grid boyutuna örnekleyerek "siyah" olan hücreleri açık say.
+      const cv = document.createElement('canvas');
+      cv.width = CFG.gridCols; cv.height = CFG.gridRows;
+      const ctx = cv.getContext('2d');
+      // Logo kare değilse en kısa kenara sığdırıp ortala
+      const scaleW = CFG.gridCols / img.width;
+      const scaleH = CFG.gridRows / img.height;
+      const s = Math.min(scaleW, scaleH);
+      const drawW = Math.round(img.width*s);
+      const drawH = Math.round(img.height*s);
+      const offX = Math.floor((CFG.gridCols - drawW)/2);
+      const offY = Math.floor((CFG.gridRows - drawH)/2);
+      ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.drawImage(img, offX, offY, drawW, drawH);
+
+      const pixels = ctx.getImageData(0,0,cv.width,cv.height).data;
+      for(let r=0;r<CFG.gridRows;r++){
+        for(let c=0;c<CFG.gridCols;c++){
+          const idx = (r*cv.width + c)*4;
+          const R=pixels[idx], G=pixels[idx+1], B=pixels[idx+2];
+          const light = (R+G+B)/3; // siyah ~ 0, beyaz ~ 255
+          const open = light < 200; // yeterince koyuysa "seçilebilir"
+          const cell = els.grid.children[r*CFG.gridCols+c];
+          if(open){
+            cell.classList.remove('blocked');
+            cell.classList.add('free');
+          }else{
+            cell.classList.remove('free');
+            cell.classList.add('blocked');
+            blocked.add(id(r,c));
           }
         }
-      };
-      maskImg.src=CFG.logoMaskUrl;
+      }
     }
 
-    let selectedCell=null;
-    function selectCell(cell){
-      if(cell.classList.contains("masked")){ alert("Bu alan seçilemez."); return; }
-      if(cell.classList.contains("taken")){ alert("Dolu!"); return; }
-      if(selectedCell) selectedCell.style.outline="";
-      selectedCell=cell;
-      cell.style.outline="2px solid red";
-    }
-
-    async function claim(){
-      if(!selectedCell){ alert("Lütfen bir kare seçin."); return; }
-      const username=document.getElementById("username").value.trim();
-      if(!username){ alert("Kullanıcı adı gerekli."); return; }
-      const file=document.getElementById("file").files[0];
-      if(!file){ alert("Görsel seçin."); return; }
-
-      // Storage upload
-      const path=`mosaic/${username}_${selectedCell.dataset.rc}.png`;
-      const rf=ref(st,path);
-      await uploadBytes(rf,file);
-      const url=await getDownloadURL(rf);
-
-      // Firestore kaydet
-      await setDoc(doc(db,"cells",selectedCell.dataset.rc),{
-        username, url, rc:selectedCell.dataset.rc, createdAt:Date.now()
+    /* === Firestore - canlı dinleme (dolu hücreler) === */
+    function listenCells(){
+      const q = collection(db,'cells');
+      onSnapshot(q,(snap)=>{
+        claimed.clear();
+        snap.forEach(d=>{
+          const v = d.data();
+          claimed.set(id(v.row, v.col), v);
+        });
+        paintClaims();
       });
-
-      selectedCell.style.backgroundImage=`url(${url})`;
-      selectedCell.classList.add("taken");
-      selectedCell.style.outline="";
-      alert("Pixel eklendi!");
     }
 
-    function zoom(f){
-      scale*=f;
-      document.getElementById("mosaic").style.transform=`scale(${scale})`;
+    function paintClaims(){
+      for(const cell of els.grid.children){
+        const r = +cell.dataset.r, c = +cell.dataset.c;
+        const key = id(r,c);
+        cell.innerHTML = "";
+        if(claimed.has(key)){
+          cell.classList.remove('free');
+          cell.classList.add('claimed');
+          const v = claimed.get(key);
+          const img = document.createElement('img');
+          img.src = v.avatarUrl; cell.appendChild(img);
+          const tip = document.createElement('div');
+          tip.className = 'tip';
+          tip.textContent = `@${v.username}: ${v.note||""}`;
+          cell.appendChild(tip);
+        }else{
+          // sadece mask’a göre free/blocked class’ları var
+          if(!blocked.has(key)){
+            cell.classList.remove('claimed');
+            cell.classList.add('free');
+          }
+        }
+      }
+      // Seçim işaretini koru
+      highlightSelection();
     }
 
-    document.getElementById("claimBtn").addEventListener("click",claim);
+    /* === Hücre tıklandığında === */
+    function onCellClick(e){
+      const r = +e.currentTarget.dataset.r;
+      const c = +e.currentTarget.dataset.c;
+      const key = id(r,c);
+      if(blocked.has(key)){ return; }
+      if(claimed.has(key)){ return; }
+      selected = {r,c};
+      highlightSelection();
+    }
 
-    loadConfig();
+    function highlightSelection(){
+      for(const cell of els.grid.children) cell.style.outline = "none";
+      if(!selected) return;
+      const cell = els.grid.children[selected.r*CFG.gridCols+selected.c];
+      cell.style.outline = "2px solid #22c55e";
+      cell.style.outlineOffset = "-2px";
+    }
+
+    /* === Zoom & Pan === */
+    function setScale(s){ scale = Math.max(0.3, Math.min(4, s)); applyTransform(); }
+    els.zoomIn.onclick  = ()=>setScale(scale*1.15);
+    els.zoomOut.onclick = ()=>setScale(scale/1.15);
+    els.zoomReset.onclick=()=>{scale=1; pan.x=pan.y=0; applyTransform();};
+
+    els.viewport.addEventListener('mousedown', (e)=>{
+      dragging = true; dragStart.x = e.clientX; dragStart.y = e.clientY; panStart.x = pan.x; panStart.y = pan.y;
+    });
+    window.addEventListener('mouseup', ()=> dragging=false);
+    window.addEventListener('mousemove', (e)=>{
+      if(!dragging) return;
+      pan.x = panStart.x + (e.clientX - dragStart.x);
+      pan.y = panStart.y + (e.clientY - dragStart.y);
+      applyTransform();
+    });
+    els.viewport.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const delta = e.deltaY>0 ? 0.9 : 1.1;
+      setScale(scale*delta);
+    }, {passive:false});
+
+    /* === Claim akışı === */
+    els.clearSel.onclick = ()=>{selected=null; highlightSelection();};
+
+    els.claimBtn.onclick = async ()=>{
+      try{
+        if(!CFG.mosaicOpen){ alert("Mozaik şu an kapalı."); return; }
+        const username = (els.username.value||"").trim();
+        if(!username){ alert("Kullanıcı adın gerekli."); return; }
+        const file = els.file.files[0];
+        if(!file){ alert("Profil görselini seç."); return; }
+        if(!selected){ alert("Önce mozaikten bir hücre seç."); return; }
+
+        // Kullanıcının limiti dolu mu?
+        if(CFG.maxClaimPerUser>0){
+          const q = query(collection(db,'cells'), where('username','==', username));
+          const qs = await getDocs(q);
+          if(qs.size >= CFG.maxClaimPerUser){
+            alert("Bu etkinlikte alabileceğin hücre sayısına ulaştın.");
+            return;
+          }
+        }
+
+        const key = id(selected.r, selected.c);
+        if(blocked.has(key) || claimed.has(key)){
+          alert("Bu hücreye yerleşemezsin."); return;
+        }
+
+        // Avatar'ı Storage'a yükle
+        const ext = file.name.split('.').pop().toLowerCase();
+        const safe = `${Date.now()}_${username}.${ext}`.replace(/\s+/g,'_');
+        const rf = sRef(stg, `avatars/${safe}`);
+        await uploadBytes(rf, file);
+        const url = await getDownloadURL(rf);
+
+        // Firestore'a yaz
+        const cellDoc = doc(db,'cells', key);
+        await setDoc(cellDoc,{
+          row: selected.r, col: selected.c,
+          username, avatarUrl: url,
+          note: (els.note.value||"").trim(),
+          createdAt: serverTimestamp()
+        });
+        selected = null; highlightSelection();
+        els.note.value = ""; els.file.value = "";
+        alert("Hücren eklendi! 🎉");
+      }catch(err){
+        console.error(err);
+        alert("Bir şeyler ters gitti. Konsolu kontrol et.");
+      }
+    };
+
+    /* === Init === */
+    (async ()=>{
+      await loadConfig();
+      buildGrid();
+      await loadMask();
+      listenCells();
+      // küçük hoşluk: maskeleme bitmeden tıklanmasın
+      els.hint.textContent = "Boş (beyaz) piksellere tıklayıp yer ayır, ardından görselini yükle ve notunu yaz :)";
+    })();
   </script>
 </body>
 </html>
