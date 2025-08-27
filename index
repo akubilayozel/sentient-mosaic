@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sentient Mosaic</title>
+  <style>
+    body { margin:0; background:#0b0b0f; color:#e5e7eb; font-family:Arial, sans-serif; text-align:center; }
+    h1 { margin:20px 0; font-size:28px; font-weight:700; }
+    .toolbar { margin:10px; }
+    #mosaic { display:grid; margin:0 auto; cursor:pointer; }
+    .cell { width:16px; height:16px; background:#fff; }
+    .taken { outline:1px solid #000; background-size:cover; background-position:center; }
+    .masked { background:#000; }
+    .controls { margin:12px; }
+    input, button { padding:6px 10px; margin:4px; border-radius:6px; border:none; }
+    button { background:#4f46e5; color:#fff; cursor:pointer; }
+    button:hover { background:#6366f1; }
+    .zoom { margin: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Sentient Mosaic</h1>
+  <div class="toolbar">
+    <input type="text" id="username" placeholder="Kullanıcı adınız (Twitter)"/>
+    <input type="file" id="file" accept="image/*"/>
+    <button id="claimBtn">Pixel Seç & Yükle</button>
+  </div>
+  <div class="controls">
+    <button class="zoom" onclick="zoom(1.2)">🔍 +</button>
+    <button class="zoom" onclick="zoom(0.8)">🔍 −</button>
+  </div>
+  <div id="mosaic"></div>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+    // 🔑 Doğru Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb30E",
+      authDomain: "sentient-mosaic.firebaseapp.com",
+      projectId: "sentient-mosaic",
+      storageBucket: "sentient-mosaic.firebasestorage.app",
+      messagingSenderId: "270660218350",
+      appId: "1:270660218350:web:4882d74709e8bfcbff72ff",
+      measurementId: "G-526BY2M6TP"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const st = getStorage(app);
+
+    let CFG = {};
+    let grid = [];
+    let scale = 1;
+
+    async function loadConfig(){
+      const snap = await getDoc(doc(db,"settings","config"));
+      if(snap.exists()){
+        CFG = snap.data();
+        buildGrid();
+      } else {
+        alert("Config bulunamadı!");
+      }
+    }
+
+    function buildGrid(){
+      const gridEl = document.getElementById("mosaic");
+      gridEl.style.gridTemplateColumns = `repeat(${CFG.gridCols}, ${CFG.cellPx}px)`;
+      gridEl.style.width = (CFG.gridCols*CFG.cellPx)+"px";
+      gridEl.style.transform = `scale(${scale})`;
+      gridEl.innerHTML="";
+      for(let r=0;r<CFG.gridRows;r++){
+        for(let c=0;c<CFG.gridCols;c++){
+          const cell=document.createElement("div");
+          cell.className="cell";
+          cell.dataset.rc=`${r}-${c}`;
+          cell.addEventListener("click",()=>selectCell(cell));
+          gridEl.appendChild(cell);
+          grid.push(cell);
+        }
+      }
+      // Mask resmi uygula
+      const maskImg = new Image();
+      maskImg.crossOrigin="anonymous";
+      maskImg.onload=()=>{
+        const canvas=document.createElement("canvas");
+        canvas.width=CFG.gridCols; canvas.height=CFG.gridRows;
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(maskImg,0,0,CFG.gridCols,CFG.gridRows);
+        const data=ctx.getImageData(0,0,CFG.gridCols,CFG.gridRows).data;
+        for(let r=0;r<CFG.gridRows;r++){
+          for(let c=0;c<CFG.gridCols;c++){
+            const idx=(r*CFG.gridCols+c)*4;
+            if(data[idx]<128){ // siyah alan
+              grid[r*CFG.gridCols+c].classList.add("masked");
+            }
+          }
+        }
+      };
+      maskImg.src=CFG.logoMaskUrl;
+    }
+
+    let selectedCell=null;
+    function selectCell(cell){
+      if(cell.classList.contains("masked")){ alert("Bu alan seçilemez."); return; }
+      if(cell.classList.contains("taken")){ alert("Dolu!"); return; }
+      if(selectedCell) selectedCell.style.outline="";
+      selectedCell=cell;
+      cell.style.outline="2px solid red";
+    }
+
+    async function claim(){
+      if(!selectedCell){ alert("Lütfen bir kare seçin."); return; }
+      const username=document.getElementById("username").value.trim();
+      if(!username){ alert("Kullanıcı adı gerekli."); return; }
+      const file=document.getElementById("file").files[0];
+      if(!file){ alert("Görsel seçin."); return; }
+
+      // Storage upload
+      const path=`mosaic/${username}_${selectedCell.dataset.rc}.png`;
+      const rf=ref(st,path);
+      await uploadBytes(rf,file);
+      const url=await getDownloadURL(rf);
+
+      // Firestore kaydet
+      await setDoc(doc(db,"cells",selectedCell.dataset.rc),{
+        username, url, rc:selectedCell.dataset.rc, createdAt:Date.now()
+      });
+
+      selectedCell.style.backgroundImage=`url(${url})`;
+      selectedCell.classList.add("taken");
+      selectedCell.style.outline="";
+      alert("Pixel eklendi!");
+    }
+
+    function zoom(f){
+      scale*=f;
+      document.getElementById("mosaic").style.transform=`scale(${scale})`;
+    }
+
+    document.getElementById("claimBtn").addEventListener("click",claim);
+
+    loadConfig();
+  </script>
+</body>
+</html>
