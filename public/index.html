@@ -60,7 +60,7 @@
     <p class="note">Bir hücre seçmek için mozaikte <b>logonun siyah alanına</b> tıkla. (Her kullanıcı en fazla 1 hücre alabilir)</p>
 
     <div class="board">
-      <div id="canvasWrap" class="canvas-wrap">
+      <div class="canvas-wrap">
         <canvas id="bgCanvas"></canvas>
         <canvas id="hitCanvas" style="display:none"></canvas>
         <canvas id="gridCanvas"></canvas>
@@ -84,6 +84,14 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+    // === Ayarlar (gerekirse oynayabilirsin) ===
+    const MASK_PREVIEW_ALPHA = 0.65;     // logonun görünürlüğü (0–1)
+    const LUMA_THRESHOLD     = 140;      // siyah algılama eşiği (yükseltmek = daha çok hücre seçilebilir)
+    const CLOSED_ALPHA       = 0.03;     // zemin hücreleri tonlama
+    const SAMPLE_POINTS      = [         // her hücrede örneklenecek 5 nokta
+      [0.5,0.5], [0.25,0.5], [0.75,0.5], [0.5,0.25], [0.5,0.75]
+    ];
+
     const firebaseConfig = {
       apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb3OE",
       authDomain: "sentient-mosaic.firebaseapp.com",
@@ -99,17 +107,17 @@
 
     const els = {
       state: document.getElementById('state'),
-      username: document.getElementById('username'),
-      file: document.getElementById('file'),
-      note: document.getElementById('note'),
-      clearSel: document.getElementById('clearSel'),
-      placeBtn: document.getElementById('placeBtn'),
       bg: document.getElementById('bgCanvas'),
       hit: document.getElementById('hitCanvas'),
       grid: document.getElementById('gridCanvas'),
       zoomIn: document.getElementById('zoomIn'),
       zoomOut: document.getElementById('zoomOut'),
       zoomPct: document.getElementById('zoomPct'),
+      username: document.getElementById('username'),
+      file: document.getElementById('file'),
+      note: document.getElementById('note'),
+      clearSel: document.getElementById('clearSel'),
+      placeBtn: document.getElementById('placeBtn'),
     };
 
     let CFG = { cellPx:16, gridRows:40, gridCols:40, logoMaskUrl:"", mosaicOpen:false, maxClaimPerUser:1 };
@@ -134,13 +142,13 @@
       drawAll();
     }
 
-    // >>> YENİ: beyaz zeminin etkisini kaldırmak için multiply ile çiziyoruz
+    // — Önizleme: beyaz zemin etkisiz, siyahlar görünür —
     function drawMaskFaint(img){
       const W = CFG.gridCols*CFG.cellPx, H = CFG.gridRows*CFG.cellPx;
       bgCtx.save();
       bgCtx.clearRect(0,0,W,H);
-      bgCtx.globalAlpha = 0.25;                // şeffaflık
-      bgCtx.globalCompositeOperation = 'multiply'; // beyaz => etkisiz, siyah => koyulaştır
+      bgCtx.globalAlpha = MASK_PREVIEW_ALPHA;
+      bgCtx.globalCompositeOperation = 'multiply';
       bgCtx.imageSmoothingEnabled = false;
       bgCtx.drawImage(img, 0,0, W,H);
       bgCtx.restore();
@@ -163,7 +171,7 @@
           } else if(isSel){
             gridCtx.fillStyle = "rgba(14,165,233,.35)";
           } else {
-            gridCtx.fillStyle = "rgba(100,116,139,.08)";
+            gridCtx.fillStyle = `rgba(100,116,139,${CLOSED_ALPHA})`;
           }
           gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
         }
@@ -190,25 +198,30 @@
     function drawAll(){ drawGrid(); }
     const lum = (r,g,b)=> 0.2126*r + 0.7152*g + 0.0722*b;
 
+    // — 5 nokta örnekleyerek hücre seçilebilir mi karar ver —
     function buildSelectableFromMask(){
       const W = CFG.gridCols * CFG.cellPx;
       const H = CFG.gridRows * CFG.cellPx;
       const data = hitCtx.getImageData(0,0,W,H).data;
-
       selectable = Array.from({length:CFG.gridRows}, ()=>Array(CFG.gridCols).fill(false));
 
       for(let r=0; r<CFG.gridRows; r++){
         for(let c=0; c<CFG.gridCols; c++){
-          const cx = Math.floor(c*CFG.cellPx + CFG.cellPx/2);
-          const cy = Math.floor(r*CFG.cellPx + CFG.cellPx/2);
-          const idx = (cy*W + cx) * 4;
-          const R = data[idx], G = data[idx+1], B = data[idx+2], A = data[idx+3];
-          if(A < 10){ selectable[r][c] = false; continue; }
-          selectable[r][c] = (lum(R,G,B) < 110); // eşik biraz yükselttik
+          let minL = 255;
+          for(const [fx,fy] of SAMPLE_POINTS){
+            const px = Math.min(W-1, Math.max(0, Math.floor((c+fx)*CFG.cellPx)));
+            const py = Math.min(H-1, Math.max(0, Math.floor((r+fy)*CFG.cellPx)));
+            const idx = (py*W + px) * 4;
+            const R = data[idx], G = data[idx+1], B = data[idx+2], A = data[idx+3];
+            if(A < 10) continue;
+            minL = Math.min(minL, lum(R,G,B));
+          }
+          selectable[r][c] = (minL < LUMA_THRESHOLD);
         }
       }
     }
 
+    // Etkileşim
     els.grid.addEventListener('click', (ev)=>{
       const rect = els.grid.getBoundingClientRect();
       const x = (ev.clientX - rect.left) / scale;
@@ -225,13 +238,14 @@
     els.zoomIn.addEventListener('click', ()=>{ scale = Math.min(2.5, +(scale+0.1).toFixed(2)); els.zoomPct.textContent = "%"+Math.round(scale*100); setCanvasSize(); });
     els.zoomOut.addEventListener('click', ()=>{ scale = Math.max(0.5, +(scale-0.1).toFixed(2)); els.zoomPct.textContent = "%"+Math.round(scale*100); setCanvasSize(); });
 
-    els.placeBtn.addEventListener('click', ()=>{
+    els.placeBtn?.addEventListener('click', ()=>{
       if(!picked) return alert("Önce logonun siyah alanından bir hücre seçin.");
       if(!els.username.value.trim()) return alert("Twitter kullanıcı adını girin.");
       if(!els.file.files[0]) return alert("Profil görselini yükleyin.");
       alert("Demo: Hücre ("+picked.join(",")+") rezerve edilmiş varsayıldı.");
     });
 
+    // Başlat
     (async ()=>{
       const snap = await getDoc(doc(db,'settings','config'));
       if(!snap.exists()){ alert("settings/config bulunamadı."); return; }
@@ -254,7 +268,7 @@
       }
 
       const img = new Image();
-      img.crossOrigin = "anonymous"; // güvenli: /mask.png aynı origin
+      img.crossOrigin = "anonymous";
       img.onload = ()=>{
         const W = CFG.gridCols * CFG.cellPx;
         const H = CFG.gridRows * CFG.cellPx;
@@ -270,7 +284,7 @@
         drawAll();
       };
       img.onerror = (e)=> console.error("Mask yüklenemedi:", CFG.logoMaskUrl, e);
-      img.src = CFG.logoMaskUrl; // ÖRN: /mask.png
+      img.src = CFG.logoMaskUrl;    // <-- Firestore’da /mask.png
     })();
   </script>
 </body>
