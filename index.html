@@ -10,6 +10,7 @@
   :root{
     --bg:#0b0b0f; --panel:#14141b; --muted:#9aa3b2; --text:#e5e7eb;
     --primary:#4f46e5; --primary-2:#6366f1; --ok:#22c55e; --warn:#ef4444;
+    --grid:#262b3a;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
@@ -61,11 +62,11 @@
 
     <div class="board">
       <div id="canvasWrap" class="canvas-wrap">
-        <!-- Arkaplan (beyaz + soluk gri logo çizgileri) -->
+        <!-- Arkaplanda maskeyi soluk çizdiğimiz kanvas -->
         <canvas id="bgCanvas"></canvas>
-        <!-- Görünmeyen—tam çözünür maskeyi ve örneklemeyi tutar -->
+        <!-- Görünmeyen: piksel örnekleme için tam çözünürlükte maske -->
         <canvas id="hitCanvas" style="display:none"></canvas>
-        <!-- Grid ve seçim çizimleri (şeffaf) -->
+        <!-- Grid ve seçim çizimleri -->
         <canvas id="gridCanvas"></canvas>
 
         <div class="zoom">
@@ -86,9 +87,11 @@
   <!-- Firebase v10 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+      getFirestore, doc, getDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // === Firebase config'in ===
+    // === Senin Firebase config'in ===
     const firebaseConfig = {
       apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb3OE",
       authDomain: "sentient-mosaic.firebaseapp.com",
@@ -122,33 +125,59 @@
     // ---- Değişkenler
     let CFG = { cellPx:16, gridRows:40, gridCols:40, logoMaskUrl:"", mosaicOpen:false, maxClaimPerUser:1 };
     let scale = 1;
-    let selectable = [];           // boolean [row][col]
-    let taken = new Set();         // rezerve edilenler (şimdilik boş)
-    let picked = null;             // [r,c]
+    let selectable = []; // boolean gridRows x gridCols
+    let taken = new Set(); // (bu örnekte boş – claim mekanizmasını sonra ekleriz)
+    let picked = null; // [r,c]
 
     const bgCtx   = els.bg.getContext('2d');
     const hitCtx  = els.hit.getContext('2d');
     const gridCtx = els.grid.getContext('2d');
 
+    // --- Arka planı beyaz boya (maske hiç gelmese bile siyah görünmesin)
+    function paintBgWhite() {
+      const W = CFG.gridCols * CFG.cellPx;
+      const H = CFG.gridRows * CFG.cellPx;
+      bgCtx.save();
+      bgCtx.setTransform(scale,0,0,scale,0,0);
+      bgCtx.clearRect(0,0,W,H);
+      bgCtx.fillStyle = "#ffffff";
+      bgCtx.fillRect(0,0,W,H);
+      bgCtx.restore();
+    }
+
     function setCanvasSize() {
       const w = CFG.gridCols * CFG.cellPx;
       const h = CFG.gridRows * CFG.cellPx;
 
-      // ŞEFFAF grid için: transform scale; arka plan da scale'li çizilecek
       [els.bg, els.hit, els.grid].forEach(c=>{
         c.width  = Math.round(w * scale);
         c.height = Math.round(h * scale);
-        c.getContext('2d').setTransform(scale,0,0,scale,0,0);
+        // tüm çizimler scale ile yapılacağından ölçekleyelim
+        const ctx = c.getContext('2d');
+        ctx.setTransform(scale,0,0,scale,0,0);
       });
 
-      drawAll(); // yeniden çiz
+      paintBgWhite();   // beyaz zemin
+      drawAll();
+    }
+
+    function drawMaskFaint(img){
+      // arka planda maskeyi %18 opaklıkla çizelim (logo belli olsun)
+      bgCtx.save();
+      const W = CFG.gridCols*CFG.cellPx, H = CFG.gridRows*CFG.cellPx;
+      bgCtx.globalAlpha = 0.18;
+      bgCtx.imageSmoothingEnabled = false;
+      bgCtx.drawImage(img, 0,0, W,H);
+      bgCtx.restore();
     }
 
     function drawGrid(){
       const W = CFG.gridCols * CFG.cellPx;
       const H = CFG.gridRows * CFG.cellPx;
+
       gridCtx.clearRect(0,0,W,H);
 
+      // Hücreleri durumuna göre tonlayalım
       for(let r=0; r<CFG.gridRows; r++){
         for(let c=0; c<CFG.gridCols; c++){
           const x = c*CFG.cellPx, y=r*CFG.cellPx;
@@ -157,13 +186,16 @@
           const isSel = selectable[r][c];
 
           if(isTaken){
-            gridCtx.fillStyle = "rgba(239,68,68,.45)";     // kırmızı
+            gridCtx.fillStyle = "rgba(239,68,68,.45)"; // kırmızı
             gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
           } else if(isSel){
-            gridCtx.fillStyle = "rgba(14,165,233,.35)";    // mavi – seçilebilir
+            gridCtx.fillStyle = "rgba(14,165,233,.35)"; // mavi – seçilebilir
             gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
-          } 
-          // zemin için doldurma yok; arka plan zaten beyaz + soluk logo
+          } else {
+            // zemin (beyaz kısım) – hafif kapatıp grid hissi
+            gridCtx.fillStyle = "rgba(100,116,139,.08)";
+            gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
+          }
         }
       }
 
@@ -189,10 +221,10 @@
 
     function drawAll(){ drawGrid(); }
 
-    // --- yardımcı
     function luminance(r,g,b){ return 0.2126*r + 0.7152*g + 0.0722*b; }
 
     function buildSelectableFromMask(){
+      // hitCanvas zaten maskeyi tam çözünürlükte tutuyor
       const W = CFG.gridCols * CFG.cellPx;
       const H = CFG.gridRows * CFG.cellPx;
       const data = hitCtx.getImageData(0,0,W,H).data;
@@ -206,101 +238,40 @@
           const cy = Math.floor(r*CFG.cellPx + CFG.cellPx/2);
           const idx = (cy*W + cx) * 4;
           const R = data[idx], G = data[idx+1], B = data[idx+2], A = data[idx+3];
-          if(A < 10){ selectable[r][c] = false; continue; }
+          if(A < 10){ // tamamen şeffafsa zemin say
+            selectable[r][c] = false;
+            continue;
+          }
+          // siyah alanlar (luminans düşük) -> seçilebilir
           const L = luminance(R,G,B);
-          selectable[r][c] = (L < 60);     // siyah alanlar seçilebilir
+          selectable[r][c] = (L < 60); // eşik
         }
       }
     }
 
-    // --- Maske işle ve çiz (beyaz zemin + gri çizgiler)
+    // Maskeyi işleyip çiz: (hitCanvas + bgCanvas + selectable)
     function processAndDrawMask(img){
       const W = CFG.gridCols * CFG.cellPx;
       const H = CFG.gridRows * CFG.cellPx;
 
-      // 1) OFFSCREEN: resmi W×H'e sığdır, eşikle, 1px dilate et
-      const off = document.createElement('canvas');
-      off.width = W; off.height = H;
-      const octx = off.getContext('2d', { willReadFrequently:true });
-      octx.imageSmoothingEnabled = false;
-      octx.drawImage(img, 0, 0, W, H);
-
-      const id = octx.getImageData(0,0,W,H);
-      const d  = id.data;
-      const BLACK_TH = 60, WHITE_TH = 180;
-
-      // siyah/beyaz eşikle
-      for(let i=0; i<d.length; i+=4){
-        const L = 0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2];
-        if(L < BLACK_TH) {             // siyah strok
-          d[i]=d[i+1]=d[i+2]=0;        // siyah
-          d[i+3]=255;
-        } else if(L > WHITE_TH) {      // beyaz zemin
-          d[i]=d[i+1]=d[i+2]=255;
-          d[i+3]=255;
-        } else {                       // gri geçişleri beyaza yakınla
-          d[i]=d[i+1]=d[i+2]=255;
-          d[i+3]=255;
-        }
-      }
-      octx.putImageData(id,0,0);
-
-      // çok ince çizgi kaybolmasın diye 1 piksel genişlet
-      const dil = octx.getImageData(0,0,W,H);
-      const dd  = dil.data, tmp = new Uint8ClampedArray(dd);
-      const idx = (x,y)=> (y*W + x)*4;
-      for(let y=1; y<H-1; y++){
-        for(let x=1; x<W-1; x++){
-          const i = idx(x,y);
-          // komşular içinde siyah varsa merkez de siyah olsun
-          const neigh = [idx(x-1,y), idx(x+1,y), idx(x,y-1), idx(x,y+1)];
-          let black = false;
-          for(const j of neigh){ if(tmp[j]===0 && tmp[j+1]===0 && tmp[j+2]===0 && tmp[j+3]===255){ black=true; break; } }
-          if(black){ dd[i]=dd[i+1]=dd[i+2]=0; dd[i+3]=255; }
-        }
-      }
-      octx.putImageData(dil,0,0);
-
-      // 2) hitCanvas'a (tam çözünürlük) siyah/beyaz veri
+      // Hit-canvas’a TAM çözünürlükte çiz (ölçek yok)
       els.hit.width = W; els.hit.height = H;
       hitCtx.setTransform(1,0,0,1,0,0);
       hitCtx.imageSmoothingEnabled = false;
       hitCtx.clearRect(0,0,W,H);
-      hitCtx.drawImage(off,0,0);
+      hitCtx.drawImage(img, 0,0, W,H);
 
-      // 3) ARKA PLAN: beyaz zemin + soluk gri çizgiler
-      bgCtx.save();
-      bgCtx.setTransform(scale,0,0,scale,0,0);     // ÖNEMLİ: görünür kanvasta ölçeği kullan
-      bgCtx.clearRect(0,0,W,H);
+      // Arka plana soluk çiz (görünsün)
+      drawMaskFaint(img);
 
-      // beyaz zemin
-      bgCtx.fillStyle = "#ffffff";
-      bgCtx.fillRect(0,0,W,H);
-
-      // soluk gri logo çizgileri
-      bgCtx.globalAlpha = 0.23;
-      const faint = off.cloneNode();
-      faint.width = W; faint.height = H;
-      const fctx = faint.getContext('2d');
-      fctx.drawImage(off,0,0);
-      const fid = fctx.getImageData(0,0,W,H);
-      const fd = fid.data;
-      for (let i=0;i<fd.length;i+=4){
-        // siyah pikselleri açık griye çevir
-        if(fd[i]===0 && fd[i+1]===0 && fd[i+2]===0 && fd[i+3]===255){
-          fd[i]=fd[i+1]=fd[i+2]=230;
-        }
-      }
-      fctx.putImageData(fid,0,0);
-      bgCtx.drawImage(faint,0,0);
-      bgCtx.restore();
-
-      // 4) seçilebilir haritayı oluştur, grid çiz
+      // Seçilebilir haritayı oluştur
       buildSelectableFromMask();
+
+      // İlk grid çizimi
       drawAll();
     }
 
-    // === Etkileşim
+    // === Etkileşimler
     els.grid.addEventListener('click', (ev)=>{
       const rect = els.grid.getBoundingClientRect();
       const x = (ev.clientX - rect.left) / scale;
@@ -317,7 +288,7 @@
     els.zoomIn.addEventListener('click', ()=>{ scale = Math.min(2.5, +(scale+0.1).toFixed(2)); els.zoomPct.textContent = "%"+Math.round(scale*100); setCanvasSize(); });
     els.zoomOut.addEventListener('click', ()=>{ scale = Math.max(0.5, +(scale-0.1).toFixed(2)); els.zoomPct.textContent = "%"+Math.round(scale*100); setCanvasSize(); });
 
-    // (Şimdilik yalnız doğrulama)
+    // (yerleştirme kısmı placeholder – dosya/yazı kontrolü)
     els.placeBtn.addEventListener('click', ()=>{
       if(!picked) return alert("Önce logonun siyah alanından bir hücre seçin.");
       if(!els.username.value.trim()) return alert("Twitter kullanıcı adını girin.");
@@ -325,33 +296,44 @@
       alert("Demo: Hücre ("+picked.join(",")+") rezerve edilmiş varsayıldı.");
     });
 
-    // === Başlangıç
+    // === Yükleme akışı
     (async ()=>{
-      const snap = await getDoc(doc(db,'settings','config'));
-      if(!snap.exists()){ alert("settings/config bulunamadı."); return; }
-      const d = snap.data();
-      CFG.cellPx          = +d.cellPx || 16;
-      CFG.gridRows        = +d.gridRows || 40;
-      CFG.gridCols        = +d.gridCols || 40;
-      CFG.logoMaskUrl     = d.logoMaskUrl || "";
-      CFG.mosaicOpen      = !!d.mosaicOpen;
-      CFG.maxClaimPerUser = +d.maxClaimPerUser || 1;
+      try{
+        // Firestore config’i çek
+        const snap = await getDoc(doc(db,'settings','config'));
+        if(!snap.exists()){ alert("settings/config bulunamadı."); return; }
+        const d = snap.data();
+        CFG.cellPx         = +d.cellPx || 16;
+        CFG.gridRows       = +d.gridRows || 40;
+        CFG.gridCols       = +d.gridCols || 40;
+        CFG.logoMaskUrl    = d.logoMaskUrl || "";
+        CFG.mosaicOpen     = !!d.mosaicOpen;
+        CFG.maxClaimPerUser= +d.maxClaimPerUser || 1;
 
-      els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
-      els.state.className   = CFG.mosaicOpen ? "state-ok" : "state-off";
+        els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
+        els.state.className = CFG.mosaicOpen ? "state-ok" : "state-off";
 
-      setCanvasSize();
+        // Kanvas boyutlarını oluştur + beyaz zemin
+        setCanvasSize();
 
-      if(!CFG.logoMaskUrl){
-        console.warn("logoMaskUrl boş. Firestore settings/config → logoMaskUrl ekleyin.");
-        return;
+        if(!CFG.logoMaskUrl){
+          console.warn("logoMaskUrl boş. Ayarlardan ekleyin.");
+          return;
+        }
+
+        // Maskeyi fetch→blob→objectURL ile yükle (CORS/cache daha az sorun çıkarır)
+        const resp = await fetch(CFG.logoMaskUrl, { mode:'cors', cache:'no-store' });
+        if(!resp.ok) throw new Error(`Mask fetch HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = ()=>{ processAndDrawMask(img); URL.revokeObjectURL(objUrl); };
+        img.onerror = (e)=> console.error("Mask image onerror:", e);
+        img.src = objUrl;
+
+      }catch(err){
+        console.error("Init error:", err);
       }
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";   // GCS download URL’lerinde çalışır
-      img.onload = ()=> processAndDrawMask(img);
-      img.onerror = (e)=> console.error("Logo mask yüklenemedi:", e);
-      img.src = CFG.logoMaskUrl;       // mutlaka ?alt=media&token=… olmalı
     })();
   </script>
 </body>
