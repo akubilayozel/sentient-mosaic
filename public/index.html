@@ -1,46 +1,46 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sentient Mosaic</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#0b0b0f; --panel:#14141b; --muted:#9aa3b2; --text:#e5e7eb;
-    --primary:#4f46e5; --primary-2:#6366f1; --ok:#22c55e; --warn:#ef4444;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
-  .wrap{max-width:1200px;margin:16px auto 40px;padding:0 16px}
-  h1{font-size:28px;margin:2px 0 12px;text-align:center;font-weight:800}
-  .sub{opacity:.85;text-align:center;margin:-2px 0 8px}
-  .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0 18px}
-  input[type="text"], textarea{
-    background:#0f1117;border:1px solid #1f2533;color:var(--text);
-    border-radius:10px;padding:10px 12px;outline:none
-  }
-  input[type="text"]{width:220px}
-  textarea{width:320px;height:36px;resize:vertical}
-  input[type="file"]{color:var(--muted)}
-  button{background:var(--primary);border:0;color:#fff;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
-  button:hover{background:var(--primary-2)}
-  .board{background:var(--panel);border:1px dashed #2b3346;border-radius:14px;padding:10px}
-  .canvas-wrap{position:relative;border:1px dashed #374055;border-radius:10px;overflow:hidden}
-  canvas{display:block;width:100%;height:auto}
-  .zoom{position:absolute;top:6px;right:10px;display:flex;gap:6px}
-  .zoom button{padding:4px 10px;border-radius:8px}
-  .legend{margin-top:8px;text-align:center;color:var(--muted);font-size:13px}
-  .pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;margin:0 4px}
-  .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
-  .sel{background:#0ea5e9}
-  .closed{background:#64748b}
-  .taken{background:#ef4444}
-  .note{color:var(--muted);text-align:center;margin:8px 0 2px}
-  .state-ok{color:var(--ok);font-weight:700}
-  .state-off{color:var(--warn);font-weight:700}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sentient Mosaic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0b0b0f; --panel:#14141b; --muted:#9aa3b2; --text:#e5e7eb;
+      --primary:#4f46e5; --primary-2:#6366f1; --ok:#22c55e; --warn:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
+    .wrap{max-width:1200px;margin:16px auto 40px;padding:0 16px}
+    h1{font-size:28px;margin:2px 0 12px;text-align:center;font-weight:800}
+    .sub{opacity:.85;text-align:center;margin:-2px 0 8px}
+    .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0 18px}
+    input[type="text"], textarea{
+      background:#0f1117;border:1px solid #1f2533;color:var(--text);
+      border-radius:10px;padding:10px 12px;outline:none
+    }
+    input[type="text"]{width:220px}
+    textarea{width:320px;height:36px;resize:vertical}
+    input[type="file"]{color:var(--muted)}
+    button{background:var(--primary);border:0;color:#fff;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    button:hover{background:var(--primary-2)}
+    .board{background:var(--panel);border:1px dashed #2b3346;border-radius:14px;padding:10px}
+    .canvas-wrap{position:relative;border:1px dashed #374055;border-radius:10px;overflow:hidden}
+    canvas{display:block;width:100%;height:auto}
+    .zoom{position:absolute;top:6px;right:10px;display:flex;gap:6px}
+    .zoom button{padding:4px 10px;border-radius:8px}
+    .legend{margin-top:8px;text-align:center;color:var(--muted);font-size:13px}
+    .pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;margin:0 4px}
+    .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
+    .sel{background:#0ea5e9}
+    .closed{background:#64748b}
+    .taken{background:#ef4444}
+    .note{color:var(--muted);text-align:center;margin:8px 0 2px}
+    .state-ok{color:var(--ok);font-weight:700}
+    .state-off{color:var(--warn);font-weight:700}
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -52,7 +52,7 @@
     <div class="row">
       <input id="username" type="text" placeholder="Twitter kullanıcı adı">
       <input id="file" type="file" accept="image/png, image/jpeg">
-      <textarea id="note" placeholder="Dobby'e notun (128 karakter)"></textarea>
+      <textarea id="note" placeholder="Dobby’e notun (128 karakter)"></textarea>
       <button id="clearSel">Seçimi temizle</button>
       <button id="placeBtn">Seçilen hücreye yerleştir</button>
     </div>
@@ -61,7 +61,7 @@
 
     <div class="board">
       <div id="canvasWrap" class="canvas-wrap">
-        <!-- Arkaplanda maskeyi çizdiğimiz kanvas -->
+        <!-- Arkaplanda maskeyi soluk çizdiğimiz kanvas -->
         <canvas id="bgCanvas"></canvas>
         <!-- Görünmeyen: piksel örnekleme için tam çözünürlükte maske -->
         <canvas id="hitCanvas" style="display:none"></canvas>
@@ -83,12 +83,12 @@
     </div>
   </div>
 
-  <!-- Firebase v10 -->
+  <!-- Firebase v10 (yalın modül) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // === Senin Firebase config'in ===
+    // === Firebase config'in ===
     const firebaseConfig = {
       apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb3OE",
       authDomain: "sentient-mosaic.firebaseapp.com",
@@ -98,6 +98,9 @@
       appId: "1:270660218350:web:4882d74709e8bfcbff72ff",
       measurementId: "G-526BY2M6TP"
     };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
 
     // ---- DOM
     const els = {
@@ -116,24 +119,12 @@
       zoomPct: document.getElementById('zoomPct'),
     };
 
-    // ---- Varsayılan ayarlar (Firestore okunamazsa bunlar kullanılır)
-    const DEFAULT_CFG = {
-      cellPx: 16,
-      gridRows: 40,
-      gridCols: 40,
-      logoMaskUrl: "/mask.png", // <— PUBLIC ROOT
-      mosaicOpen: true,
-      maxClaimPerUser: 1,
-    };
-
-    let CFG = { ...DEFAULT_CFG };
+    // ---- Değişkenler
+    let CFG = { cellPx:16, gridRows:40, gridCols:40, logoMaskUrl:"", mosaicOpen:true, maxClaimPerUser:1 };
     let scale = 1;
     let selectable = []; // boolean gridRows x gridCols
-    let taken = new Set(); // (bu örnekte boş – claim mekanizmasını sonra ekleyebiliriz)
-    let picked = null; // [r,c]
-
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+    let taken = new Set(); // (bu örnekte boş – claim mekanizmasını sonra ekleriz)
+    let picked = null;     // [r,c]
 
     const bgCtx   = els.bg.getContext('2d');
     const hitCtx  = els.hit.getContext('2d');
@@ -152,15 +143,13 @@
       drawAll();
     }
 
-    function drawMask(img){
-      // Arka plan maskeyi tam görünür çizelim
-      const W = CFG.gridCols * CFG.cellPx;
-      const H = CFG.gridRows * CFG.cellPx;
+    function drawMaskFaint(img){
+      const W = CFG.gridCols*CFG.cellPx, H = CFG.gridRows*CFG.cellPx;
       bgCtx.save();
       bgCtx.clearRect(0,0,W,H);
-      bgCtx.globalAlpha = 1.0; // <= görünür
+      bgCtx.globalAlpha = 0.22;          // logoyu net görmek için biraz daha belirgin
       bgCtx.imageSmoothingEnabled = false;
-      bgCtx.drawImage(img, 0, 0, W, H);
+      bgCtx.drawImage(img, 0,0, W,H);
       bgCtx.restore();
     }
 
@@ -170,7 +159,6 @@
 
       gridCtx.clearRect(0,0,W,H);
 
-      // Hücreleri durumuna göre tonlayalım
       for(let r=0; r<CFG.gridRows; r++){
         for(let c=0; c<CFG.gridCols; c++){
           const x = c*CFG.cellPx, y=r*CFG.cellPx;
@@ -179,20 +167,17 @@
           const isSel = selectable[r][c];
 
           if(isTaken){
-            gridCtx.fillStyle = "rgba(239,68,68,.45)"; // kırmızı
-            gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
+            gridCtx.fillStyle = "rgba(239,68,68,.45)";     // kırmızı: dolu
           } else if(isSel){
-            gridCtx.fillStyle = "rgba(14,165,233,.30)"; // mavi – seçilebilir
-            gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
+            gridCtx.fillStyle = "rgba(14,165,233,.35)";    // mavi: seçilebilir
           } else {
-            // zemin (beyaz kısım) – hafif kapatıp grid hissi
-            gridCtx.fillStyle = "rgba(100,116,139,.06)";
-            gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
+            gridCtx.fillStyle = "rgba(100,116,139,.08)";   // zemin
           }
+          gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
         }
       }
 
-      // Izgara çizgileri
+      // ızgara çizgileri
       gridCtx.strokeStyle = "rgba(55,65,81,.35)";
       gridCtx.lineWidth = 1;
       for(let c=0; c<=CFG.gridCols; c++){
@@ -217,7 +202,6 @@
     function luminance(r,g,b){ return 0.2126*r + 0.7152*g + 0.0722*b; }
 
     function buildSelectableFromMask(){
-      // hitCanvas zaten maskeyi tam çözünürlükte tutuyor
       const W = CFG.gridCols * CFG.cellPx;
       const H = CFG.gridRows * CFG.cellPx;
       const data = hitCtx.getImageData(0,0,W,H).data;
@@ -235,7 +219,7 @@
             selectable[r][c] = false;
             continue;
           }
-          // siyah alanlar (luminans düşük) -> seçilebilir
+          // Siyah alanlar (luminans düşük) -> seçilebilir
           const L = luminance(R,G,B);
           selectable[r][c] = (L < 60); // eşik
         }
@@ -268,12 +252,7 @@
 
     // === Yükleme akışı
     (async ()=>{
-      // Önce varsayılanlarla gösterimi hazırlayalım
-      els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
-      els.state.className = CFG.mosaicOpen ? "state-ok" : "state-off";
-      setCanvasSize();
-
-      // Firestore config’i çek (okunamazsa varsayılanla devam)
+      // Firestore'u dene (başarısız olsa da uygulama çalışsın)
       try{
         const snap = await getDoc(doc(db,'settings','config'));
         if(snap.exists()){
@@ -284,39 +263,49 @@
           CFG.logoMaskUrl     = d.logoMaskUrl || CFG.logoMaskUrl;
           CFG.mosaicOpen      = (typeof d.mosaicOpen==="boolean") ? d.mosaicOpen : CFG.mosaicOpen;
           CFG.maxClaimPerUser = +d.maxClaimPerUser || CFG.maxClaimPerUser;
-
-          els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
-          els.state.className = CFG.mosaicOpen ? "state-ok" : "state-off";
-          setCanvasSize();
         }
       }catch(e){
-        console.warn("Firestore okunamadı, varsayılan ayarlar kullanılacak.", e);
+        console.warn("Firestore okunamadı:", e?.message || e);
       }
 
-      // Maskeyi yükle
+      // UI durumu
+      els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
+      els.state.className = CFG.mosaicOpen ? "state-ok" : "state-off";
+
+      // Kanvas boyutları
+      setCanvasSize();
+
+      // ------------------------------
+      // ÖNEMLİ: Maskeyi zorla /mask.png'den yükle
+      // (Firestore'dan gelse bile üzerine yazıyoruz)
+      CFG.logoMaskUrl = "/mask.png";
+      console.log("Mask URL:", CFG.logoMaskUrl);
+      // ------------------------------
+
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = ()=>{
         const W = CFG.gridCols * CFG.cellPx;
         const H = CFG.gridRows * CFG.cellPx;
 
-        // Hit-canvas (tam çözünürlük)
+        // Hit-canvas’a TAM çözünürlükte çiz (ölçek yok)
         els.hit.width = W; els.hit.height = H;
         hitCtx.setTransform(1,0,0,1,0,0);
         hitCtx.imageSmoothingEnabled = false;
         hitCtx.clearRect(0,0,W,H);
         hitCtx.drawImage(img, 0,0, W,H);
 
-        // Arka plan
-        drawMask(img);
+        // Arka plana soluk çiz (görünsün)
+        drawMaskFaint(img);
 
         // Seçilebilir haritayı oluştur
         buildSelectableFromMask();
 
-        // İlk grid çizimi
+        // İlk grid
         drawAll();
       };
-      img.onerror = (e)=>console.error("Maske yüklenemedi:", e, "URL:", CFG.logoMaskUrl);
+      img.onerror = (e)=>{ console.error("Mask yüklenemedi:", e); alert("Maske yüklenemedi: /mask.png"); };
+
       img.src = CFG.logoMaskUrl || "/mask.png";
     })();
   </script>
