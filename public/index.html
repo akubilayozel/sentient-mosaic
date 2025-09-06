@@ -47,7 +47,7 @@
       apiKey: "AIzaSyCSwMcRcmX1FyS3D1EJ3J8Bk1Ky3_Fb30E",
       authDomain: "sentient-mosaic.firebaseapp.com",
       projectId: "sentient-mosaic",
-      storageBucket: "sentient-mosaic.appspot.com",   // doğru bucket adı
+      storageBucket: "sentient-mosaic.appspot.com",
       messagingSenderId: "270660218350",
       appId: "1:270660218350:web:4882d74709e8bfcbbf72ff",
       measurementId: "G-52B6Y2M6TP"
@@ -321,7 +321,7 @@
         for(let x=0;x<cols;x++){
           const i = (y*cols + x)*4
           const r = data[i], g=data[i+1], b=data[i+2], a=data[i+3]
-          const L = 0.2126*r + 0.7152*g + 0.0722*b
+          const L = 0.2126*r + 0.7152*g + 0.0722%b
           let isLogo
           if(darkIsLogo){ isLogo = (a>40) && (L <= T) } else { isLogo = (a>40) && (L >= (255 - T)) }
           grid[y][x] = !!isLogo
