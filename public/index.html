@@ -15,7 +15,6 @@
     .toolbar input[type="text"],.toolbar input[type="url"]{background:#0b0d12;color:var(--text);border:1px solid var(--ring);border-radius:8px;padding:8px 10px;min-width:200px}
     .toolbar input[type="file"]{color:var(--muted)}
     .toolbar label{font-size:12px;color:var(--muted)}
-    .toolbar .seg{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .btn{background:#1b1f2b;color:var(--text);border:1px solid var(--ring);border-radius:10px;padding:8px 12px;cursor:pointer}
     .btn.primary{background:#5046e4;color:#fff;border:none}
     .hint{color:var(--muted);font-size:12px;margin-top:-4px}
@@ -25,6 +24,7 @@
     .status{font-size:12px;color:#fca5a5;text-align:center;min-height:18px}
     .pill{padding:2px 8px;border-radius:999px;background:#11162a;border:1px solid #1d2440;color:#9fb4ff;font-size:11px}
     .sp{flex:1}
+
     /* Modal */
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:50}
     .modal.show{display:flex}
@@ -36,22 +36,24 @@
     .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
   </style>
 
-  <!-- Firebase (modüler) - kendi config'in ile doldur ve bu script'i </head> öncesi bırak -->
+  <!-- Firebase (modüler SDK) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, writeBatch, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, writeBatch, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
     import { getStorage, ref as sref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js";
 
-    // 🔧 KENDİ PROJE BİLGİLERİNİ YERLEŞTİR
     const firebaseConfig = {
-      apiKey: "YOUR_KEY",
-      authDomain: "YOUR_DOMAIN",
-      projectId: "YOUR_PROJECT",
-      appId: "YOUR_APPID",
-      storageBucket: "YOUR_BUCKET.appspot.com"
+      apiKey: "AIzaSyCSwMcRcmX1FyS3D1EJ3J8Bk1Ky3_Fb30E",
+      authDomain: "sentient-mosaic.firebaseapp.com",
+      projectId: "sentient-mosaic",
+      storageBucket: "sentient-mosaic.appspot.com",   // doğru bucket adı
+      messagingSenderId: "270660218350",
+      appId: "1:270660218350:web:4882d74709e8bfcbbf72ff",
+      measurementId: "G-52B6Y2M6TP"
     };
 
+    // Init
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
@@ -83,21 +85,26 @@
       });
     };
 
-    // Image upload helper → Storage
-    async function uploadPlacementImage({ x, y, uid, file }){
-      if(!file) return null;
-      const safeHandle = (window.__PENDING__?.tw || '').replace(/[^a-zA-Z0-9_\.\-@]/g,'').slice(0,32) || 'user';
-      const path = `placements/${x}_${y}/${uid}-${Date.now()}-${safeHandle}.png`;
+    // Görseli Storage'a yükle → URL döndür (orijinal uzantıyı koru)
+    async function uploadPlacementImage({ x, y, uid, file }) {
+      if (!file) return null;
+      const ext = (file.type || "").includes("png") ? "png"
+                : (file.type || "").includes("jpeg") ? "jpg"
+                : (file.type || "").includes("webp") ? "webp"
+                : "bin";
+      const safeHandle = (window.__PENDING__?.tw || "").replace(/[^a-zA-Z0-9_.\-@]/g, "").slice(0, 32) || "user";
+      const path = `placements/${x}_${y}/${uid}-${Date.now()}-${safeHandle}.${ext}`;
       const ref = sref(storage, path);
-      const bytes = await file.arrayBuffer();
-      await uploadBytes(ref, new Blob([bytes], { type: 'image/png' }));
+      await uploadBytes(ref, file);
       return await getDownloadURL(ref);
     }
 
-    // Hücre claim (tek hak) + image URL
-    window.claimSelectedCell = async ({ x, y, tw="", note="", file }) => {
-      const user = auth.currentUser; if (!user) throw new Error("Anonymous auth yok.");
-      const imageUrl = await uploadPlacementImage({ x, y, uid: user.uid, file }).catch(()=>null);
+    // Hücre claim (tek hak) + imageUrl kaydı
+    window.claimSelectedCell = async ({ x, y, tw = "", note = "", file }) => {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Anonymous auth yok.");
+
+      const imageUrl = await uploadPlacementImage({ x, y, uid: user.uid, file }).catch(() => null);
 
       const batch = writeBatch(db);
       const cellId = `${x}_${y}`;
@@ -105,7 +112,7 @@
       const claimRef = doc(db, "claims", user.uid);
 
       const payload = { x, y, tw, note, uid: user.uid, ts: Date.now() };
-      if(imageUrl) payload.imageUrl = imageUrl;
+      if (imageUrl) payload.imageUrl = imageUrl;
 
       batch.set(placeRef, payload, { merge: false });
       batch.set(claimRef, { placed: true, x, y, ts: Date.now() }, { merge: false });
@@ -127,15 +134,15 @@
       </div>
       <div class="row" id="rowUrl">
         <label>Mask URL</label>
-        <input id="maskUrl" type="url" value="/mask.png" placeholder="/mask.png veya https://..."/>
+        <input id="maskUrl" type="url" value="mask.png" placeholder="mask.png veya https://..." />
       </div>
       <div class="row" id="rowText" style="display:none">
         <label>Metin</label>
-        <input id="textInput" type="text" value="SENTIENT"/>
+        <input id="textInput" type="text" value="SENTIENT" />
         <label>Yazı boyutu <input id="fontPx" type="range" min="24" max="240" value="160"> <span id="fontPxVal">160</span> px</label>
       </div>
       <div class="row" id="rowUpload" style="display:none">
-        <input id="fileGlobal" type="file" accept="image/png,image/jpeg,image/webp"/>
+        <input id="fileGlobal" type="file" accept="image/png,image/jpeg,image/webp" />
       </div>
       <div class="row">
         <label>Izgara: <span id="colsLab">40</span>x<span id="rowsLab">40</span> hücre, hücre <span id="cellLab">16</span> px</label>
@@ -146,7 +153,7 @@
         <button id="btnRender" class="btn primary">Yeniden oluştur</button>
         <button id="btnDownload" class="btn">PNG indir</button>
       </div>
-      <div class="hint">Not: Harici bir CDN kullanıyorsan, CORS açık değilse mask görüntüsü yüklenmeyebilir. Bu durumda <b>Metin</b> ya da <b>Görsel yükle</b> seçeneğini kullan.</div>
+      <div class="hint">Sadece <b>mavi</b> (logo) hücreler tıklanabilir. Harici maskelerde CORS sorunu olursa <b>Metin</b> ya da <b>Görsel yükle</b> kullan.</div>
     </div>
 
     <div class="stage">
@@ -154,20 +161,20 @@
     </div>
 
     <div id="status" class="status"></div>
-    <div class="legend">Logo hücreleri <span style="color:var(--logo)">mavi</span> dairelerdir. <b>Sadece mavi alan</b> tıklanabilir. Tıklayınca görsel + @handle + not eklenir.</div>
+    <div class="legend">Mavi daireler logo piksellerini temsil eder. Hücreye tıklayınca görsel + @handle + not istenir ve kaydedilir.</div>
   </div>
 
   <!-- Claim modal -->
   <div id="modal" class="modal" aria-hidden="true">
     <div class="card">
       <h3>Hücreyi Sahiplen</h3>
-      <div class="desc">Bu hücre logo alanında. Görsel yükle, @handle ve kısa not ekle.</div>
+      <div class="desc">Bu hücre logo alanında. Görselini yükle, @handle ve kısa not ekle.</div>
       <label>Twitter kullanıcı adı</label>
-      <input id="m_tw" type="text" placeholder="@kullanici" maxlength="32"/>
+      <input id="m_tw" type="text" placeholder="@kullanici" maxlength="32" />
       <label>Not</label>
-      <input id="m_note" type="text" placeholder="Sentient'e notun (128 karakter)" maxlength="128"/>
+      <input id="m_note" type="text" placeholder="Sentient'e notun (128 karakter)" maxlength="128" />
       <label>Görsel (PNG/JPG/WebP)</label>
-      <input id="m_file" type="file" accept="image/*"/>
+      <input id="m_file" type="file" accept="image/*" />
       <div class="actions">
         <button id="m_cancel" class="btn">Vazgeç</button>
         <button id="m_submit" class="btn primary">Kaydet</button>
@@ -175,358 +182,344 @@
     </div>
   </div>
 
-<script>
-;(() => {
-  // ------- State & helpers -------
-  const $ = (s) => document.querySelector(s)
-  const $$ = (s) => Array.from(document.querySelectorAll(s))
+  <script>
+  ;(() => {
+    // ------- State & helpers -------
+    const $ = (s) => document.querySelector(s)
+    const $$ = (s) => Array.from(document.querySelectorAll(s))
 
-  const canvas = $('#mosaic')
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  const statusEl = $('#status')
+    const canvas = $('#mosaic')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    const statusEl = $('#status')
 
-  const ui = {
-    srcRadios: () => $$('input[name="src"]'),
-    maskUrl: $('#maskUrl'),
-    textInput: $('#textInput'),
-    fontPx: $('#fontPx'),
-    fontPxVal: $('#fontPxVal'),
-    fileGlobal: $('#fileGlobal'),
-    thr: $('#thr'), thrVal: $('#thrVal'),
-    darkIsLogo: $('#darkIsLogo'),
-    cols: $('#cols'), rows: $('#rows'), cell: $('#cell'),
-    colsLab: $('#colsLab'), rowsLab: $('#rowsLab'), cellLab: $('#cellLab'),
-    rowUrl: $('#rowUrl'), rowText: $('#rowText'), rowUpload: $('#rowUpload'),
-    btnRender: $('#btnRender'), btnDownload: $('#btnDownload'),
-  }
-
-  const modal = {
-    root: $('#modal'), tw: $('#m_tw'), note: $('#m_note'), file: $('#m_file'),
-    submit: $('#m_submit'), cancel: $('#m_cancel')
-  }
-
-  const state = {
-    gridCols: 40,
-    gridRows: 40,
-    cellPx: 16,
-    grid: null, // boolean[][]
-    placements: new Map(), // key "x,y" -> { x,y, tw, note, imageUrl, uid }
-    selected: null, // {x,y}
-    srcKind: 'url',
-  }
-  window.__STATE__ = state
-
-  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
-
-  function setCanvasSize() {
-    const wCss = state.gridCols * state.cellPx
-    const hCss = state.gridRows * state.cellPx
-    canvas.width = Math.floor(wCss * DPR)
-    canvas.height = Math.floor(hCss * DPR)
-    canvas.style.width = wCss + 'px'
-    canvas.style.height = hCss + 'px'
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
-  }
-
-  function paintBG(){ ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height) }
-
-  // image cache for placement avatars
-  const imgCache = new Map()
-  function getImg(url){
-    if(!url) return null
-    if(imgCache.has(url)) return imgCache.get(url)
-    const im = new Image(); im.crossOrigin='anonymous'; im.src=url; imgCache.set(url, im)
-    im.onload = () => drawGrid()
-    return im
-  }
-
-  function drawGrid(){
-    paintBG()
-    const cell = state.cellPx
-    const rows = state.gridRows, cols = state.gridCols
-    const grid = state.grid
-
-    // logo dots (mavi)
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--logo').trim() || '#0ea5e9'
-    for(let y=0;y<rows;y++){
-      for(let x=0;x<cols;x++){
-        if(!grid || !grid[y][x]) continue
-        const cx = x*cell + cell/2
-        const cy = y*cell + cell/2
-        const r = Math.floor(cell*0.45)
-        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill()
-      }
+    const ui = {
+      srcRadios: () => $$('input[name="src"]'),
+      maskUrl: $('#maskUrl'),
+      textInput: $('#textInput'),
+      fontPx: $('#fontPx'),
+      fontPxVal: $('#fontPxVal'),
+      fileGlobal: $('#fileGlobal'),
+      thr: $('#thr'), thrVal: $('#thrVal'),
+      darkIsLogo: $('#darkIsLogo'),
+      cols: $('#cols'), rows: $('#rows'), cell: $('#cell'),
+      colsLab: $('#colsLab'), rowsLab: $('#rowsLab'), cellLab: $('#cellLab'),
+      rowUrl: $('#rowUrl'), rowText: $('#rowText'), rowUpload: $('#rowUpload'),
+      btnRender: $('#btnRender'), btnDownload: $('#btnDownload'),
     }
 
-    // grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1
-    for(let x=0;x<=cols;x++){ ctx.beginPath(); ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,rows*cell); ctx.stroke() }
-    for(let y=0;y<=rows;y++){ ctx.beginPath(); ctx.moveTo(0,y*cell); ctx.lineTo(cols*cell,y*cell); ctx.stroke() }
+    const modal = {
+      root: $('#modal'), tw: $('#m_tw'), note: $('#m_note'), file: $('#m_file'),
+      submit: $('#m_submit'), cancel: $('#m_cancel')
+    }
 
-    // placements overlay (image or white dot)
-    for(const [key, meta] of state.placements.entries()){
-      const [x,y] = key.split(',').map(Number)
-      const cx = x*cell + cell/2, cy = y*cell + cell/2
-      const r = Math.max(2, cell*0.44)
-      if(meta.imageUrl){
-        const img = getImg(meta.imageUrl)
-        if(img && img.complete && img.naturalWidth){
-          ctx.save();
-          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip()
-          ctx.drawImage(img, cx-r, cy-r, r*2, r*2)
-          ctx.restore()
-          // thin ring
-          ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1
-          ctx.beginPath(); ctx.arc(cx, cy, r-0.5, 0, Math.PI*2); ctx.stroke()
+    const state = {
+      gridCols: 40,
+      gridRows: 40,
+      cellPx: 16,
+      grid: null, // boolean[][]
+      placements: new Map(), // key "x,y" -> { x,y, tw, note, imageUrl, uid }
+      selected: null, // {x,y}
+      srcKind: 'url',
+    }
+    window.__STATE__ = state
+
+    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+
+    function setCanvasSize() {
+      const wCss = state.gridCols * state.cellPx
+      const hCss = state.gridRows * state.cellPx
+      canvas.width = Math.floor(wCss * DPR)
+      canvas.height = Math.floor(hCss * DPR)
+      canvas.style.width = wCss + 'px'
+      canvas.style.height = hCss + 'px'
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
+    }
+
+    function paintBG(){ ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height) }
+
+    // cache for placement avatars
+    const imgCache = new Map()
+    function getImg(url){
+      if(!url) return null
+      if(imgCache.has(url)) return imgCache.get(url)
+      const im = new Image(); im.crossOrigin='anonymous'; im.src=url; imgCache.set(url, im)
+      im.onload = () => drawGrid()
+      return im
+    }
+
+    function drawGrid(){
+      paintBG()
+      const cell = state.cellPx
+      const rows = state.gridRows, cols = state.gridCols
+      const grid = state.grid
+
+      // logo dots
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--logo').trim() || '#0ea5e9'
+      for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+          if(!grid || !grid[y][x]) continue
+          const cx = x*cell + cell/2
+          const cy = y*cell + cell/2
+          const r = Math.floor(cell*0.45)
+          ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill()
+        }
+      }
+
+      // grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1
+      for(let x=0;x<=cols;x++){ ctx.beginPath(); ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,rows*cell); ctx.stroke() }
+      for(let y=0;y<=rows;y++){ ctx.beginPath(); ctx.moveTo(0,y*cell); ctx.lineTo(cols*cell,y*cell); ctx.stroke() }
+
+      // placements overlay
+      for(const [key, meta] of state.placements.entries()){
+        const [x,y] = key.split(',').map(Number)
+        const cx = x*cell + cell/2, cy = y*cell + cell/2
+        const r = Math.max(2, cell*0.44)
+        if(meta.imageUrl){
+          const img = getImg(meta.imageUrl)
+          if(img && img.complete && img.naturalWidth){
+            ctx.save()
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip()
+            ctx.drawImage(img, cx-r, cy-r, r*2, r*2)
+            ctx.restore()
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1
+            ctx.beginPath(); ctx.arc(cx, cy, r-0.5, 0, Math.PI*2); ctx.stroke()
+          } else {
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); ctx.fill()
+          }
         } else {
           ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); ctx.fill()
         }
-      } else {
-        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); ctx.fill()
+      }
+
+      // selection outline
+      if(state.selected){
+        const {x,y} = state.selected
+        ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 2
+        ctx.strokeRect(x*cell+1, y*cell+1, cell-2, cell-2)
       }
     }
+    window.__DRAW__ = drawGrid
 
-    // selection highlight
-    if(state.selected){
-      const {x,y} = state.selected
-      ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 2
-      ctx.strokeRect(x*cell+1, y*cell+1, cell-2, cell-2)
+    // ---------- Grid builders ----------
+    function boolGrid(rows, cols, fill=false){
+      return Array.from({length: rows}, () => Array(cols).fill(fill))
     }
-  }
-  window.__DRAW__ = drawGrid
+    function sampleToGrid(sampleCanvas, rows, cols){
+      const t = document.createElement('canvas')
+      t.width = cols; t.height = rows
+      const tctx = t.getContext('2d', { willReadFrequently: true })
+      tctx.imageSmoothingEnabled = false
+      tctx.drawImage(sampleCanvas, 0, 0, cols, rows)
 
-  // ---------- Grid builders ----------
-  function boolGrid(rows, cols, fill=false){
-    return Array.from({length: rows}, () => Array(cols).fill(fill))
-  }
+      const data = tctx.getImageData(0,0,cols,rows).data
+      const grid = boolGrid(rows, cols, false)
+      const T = +ui.thr.value
+      const darkIsLogo = ui.darkIsLogo.checked
 
-  function sampleToGrid(sampleCanvas, rows, cols){
-    // Resample to rows x cols and threshold
-    const t = document.createElement('canvas')
-    t.width = cols; t.height = rows
-    const tctx = t.getContext('2d', { willReadFrequently: true })
-    tctx.imageSmoothingEnabled = false
-    tctx.drawImage(sampleCanvas, 0, 0, cols, rows)
-
-    const data = tctx.getImageData(0,0,cols,rows).data
-    const grid = boolGrid(rows, cols, false)
-    const T = +ui.thr.value
-    const darkIsLogo = ui.darkIsLogo.checked
-
-    for(let y=0;y<rows;y++){
-      for(let x=0;x<cols;x++){
-        const i = (y*cols + x)*4
-        const r = data[i], g=data[i+1], b=data[i+2], a=data[i+3]
-        const L = 0.2126*r + 0.7152*g + 0.0722*b
-        let isLogo
-        if(darkIsLogo){ isLogo = (a>40) && (L <= T) } else { isLogo = (a>40) && (L >= (255 - T)) }
-        grid[y][x] = !!isLogo
+      for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+          const i = (y*cols + x)*4
+          const r = data[i], g=data[i+1], b=data[i+2], a=data[i+3]
+          const L = 0.2126*r + 0.7152*g + 0.0722*b
+          let isLogo
+          if(darkIsLogo){ isLogo = (a>40) && (L <= T) } else { isLogo = (a>40) && (L >= (255 - T)) }
+          grid[y][x] = !!isLogo
+        }
       }
+      return grid
     }
-    return grid
-  }
-
-  function buildGridFromText(text){
-    const rows = state.gridRows, cols = state.gridCols
-    const sc = document.createElement('canvas')
-    sc.width = cols*4; sc.height = rows*4 // oversample for smoother edges
-    const sctx = sc.getContext('2d')
-    sctx.clearRect(0,0,sc.width, sc.height)
-    sctx.fillStyle = '#000'; sctx.fillRect(0,0,sc.width, sc.height)
-    sctx.fillStyle = '#fff'
-    sctx.textBaseline = 'middle'; sctx.textAlign = 'center'
-    const fs = +ui.fontPx.value
-    sctx.font = `800 ${fs}px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial`
-    sctx.fillText(text || 'SENTIENT', sc.width/2, sc.height/2)
-    return sampleToGrid(sc, rows, cols)
-  }
-
-  function buildGridFromImage(img){
-    const rows = state.gridRows, cols = state.gridCols
-    const sc = document.createElement('canvas')
-    sc.width = img.naturalWidth; sc.height = img.naturalHeight
-    const sctx = sc.getContext('2d')
-    sctx.drawImage(img,0,0)
-    return sampleToGrid(sc, rows, cols)
-  }
-
-  function buildGridFromUrl(url){
-    return new Promise((resolve) => {
-      const img = new Image()
-      try {
-        const link = document.createElement('a'); link.href = url
-        const sameOrigin = (link.origin === window.location.origin)
-        if(!sameOrigin) img.crossOrigin = 'anonymous'
-      } catch {}
-      img.onload = () => resolve(buildGridFromImage(img))
-      img.onerror = () => resolve(null)
-      img.src = url
-    })
-  }
-
-  // ---------- Render pipeline ----------
-  async function render(){
-    state.gridCols = +ui.cols.value
-    state.gridRows = +ui.rows.value
-    state.cellPx = +ui.cell.value
-
-    ui.colsLab.textContent = state.gridCols
-    ui.rowsLab.textContent = state.gridRows
-    ui.cellLab.textContent = state.cellPx
-
-    setCanvasSize()
-
-    let grid = null
-    const srcKind = state.srcKind
-    statusEl.textContent = ''
-
-    if(srcKind === 'url'){
-      grid = await buildGridFromUrl(ui.maskUrl.value.trim())
-      if(!grid){ statusEl.textContent = 'Mask yüklenemedi, metin fallback.'; grid = buildGridFromText(ui.textInput.value) }
-    } else if(srcKind === 'text'){
-      grid = buildGridFromText(ui.textInput.value)
-    } else if(srcKind === 'upload'){
-      const f = ui.fileGlobal.files && ui.fileGlobal.files[0]
-      if(!f){ statusEl.textContent = 'Bir görsel seçmelisin.'; grid = buildGridFromText(ui.textInput.value) }
-      else {
-        const url = URL.createObjectURL(f)
+    function buildGridFromText(text){
+      const rows = state.gridRows, cols = state.gridCols
+      const sc = document.createElement('canvas')
+      sc.width = cols*4; sc.height = rows*4
+      const sctx = sc.getContext('2d')
+      sctx.clearRect(0,0,sc.width, sc.height)
+      sctx.fillStyle = '#000'; sctx.fillRect(0,0,sc.width, sc.height)
+      sctx.fillStyle = '#fff'
+      sctx.textBaseline = 'middle'; sctx.textAlign = 'center'
+      const fs = +ui.fontPx.value
+      sctx.font = `800 ${fs}px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial`
+      sctx.fillText(text || 'SENTIENT', sc.width/2, sc.height/2)
+      return sampleToGrid(sc, rows, cols)
+    }
+    function buildGridFromImage(img){
+      const rows = state.gridRows, cols = state.gridCols
+      const sc = document.createElement('canvas')
+      sc.width = img.naturalWidth; sc.height = img.naturalHeight
+      const sctx = sc.getContext('2d')
+      sctx.drawImage(img,0,0)
+      return sampleToGrid(sc, rows, cols)
+    }
+    function buildGridFromUrl(url){
+      return new Promise((resolve) => {
         const img = new Image()
-        await new Promise((res)=>{ img.onload = () => res(); img.onerror = () => res(); img.src = url })
-        URL.revokeObjectURL(url)
-        grid = img.complete && img.naturalWidth ? buildGridFromImage(img) : buildGridFromText(ui.textInput.value)
-      }
+        try {
+          const link = document.createElement('a'); link.href = url
+          const sameOrigin = (link.origin === window.location.origin)
+          if(!sameOrigin) img.crossOrigin = 'anonymous'
+        } catch {}
+        img.onload = () => resolve(buildGridFromImage(img))
+        img.onerror = () => resolve(null)
+        img.src = url
+      })
     }
 
-    state.grid = grid || boolGrid(state.gridRows, state.gridCols, false)
-    drawGrid()
-  }
+    // ---------- Render pipeline ----------
+    async function render(){
+      state.gridCols = +ui.cols.value
+      state.gridRows = +ui.rows.value
+      state.cellPx = +ui.cell.value
 
-  // ---------- Selection & claim flow ----------
-  function pixelToCell(ev){
-    const rect = canvas.getBoundingClientRect()
-    const x = ev.clientX - rect.left
-    const y = ev.clientY - rect.top
-    const sx = Math.floor(x / (rect.width / state.gridCols))
-    const sy = Math.floor(y / (rect.height / state.gridRows))
-    return {x: Math.max(0, Math.min(state.gridCols-1, sx)), y: Math.max(0, Math.min(state.gridRows-1, sy))}
-  }
+      ui.colsLab.textContent = state.gridCols
+      ui.rowsLab.textContent = state.gridRows
+      ui.cellLab.textContent = state.cellPx
 
-  function openModal(){ modal.root.classList.add('show'); modal.root.setAttribute('aria-hidden','false') }
-  function closeModal(){ modal.root.classList.remove('show'); modal.root.setAttribute('aria-hidden','true'); modal.tw.value=''; modal.note.value=''; modal.file.value='' }
+      setCanvasSize()
 
-  canvas.addEventListener('click', (ev) => {
-    const {x,y} = pixelToCell(ev)
-    if(!state.grid || !state.grid[y]?.[x]){ statusEl.textContent = 'Bu hücre logo alanında değil.'; return }
-    const key = x+','+y
-    if(state.placements.has(key)){ statusEl.textContent = 'Bu hücre zaten dolu.'; return }
-    state.selected = {x,y}
-    drawGrid()
-    openModal()
-  })
+      let grid = null
+      const srcKind = state.srcKind
+      statusEl.textContent = ''
 
-  modal.cancel.addEventListener('click', () => { closeModal() })
-  modal.submit.addEventListener('click', async () => {
-    try{
-      if(!state.selected){ statusEl.textContent='Seçim yok.'; return }
-      const tw = (modal.tw.value||'').trim()
-      const note = (modal.note.value||'').trim()
-      const file = modal.file.files && modal.file.files[0]
-
-      // Save pending for file name helper
-      window.__PENDING__ = { tw }
-
-      if(!window.claimSelectedCell){ statusEl.textContent = 'Firestore bağlantısı yok.'; return }
-      await window.claimSelectedCell({ x: state.selected.x, y: state.selected.y, tw, note, file })
-      closeModal()
-      statusEl.textContent = 'Hücre yerleştirildi.'
-    }catch(e){ statusEl.textContent = 'Yerleştirme hatası: ' + (e?.message||e) }
-  })
-
-  // ---------- Exports ----------
-  $('#btnDownload').addEventListener('click', () => {
-    const exportScale = 2
-    const out = document.createElement('canvas')
-    out.width = canvas.width * exportScale / DPR
-    out.height = canvas.height * exportScale / DPR
-    const o = out.getContext('2d')
-    o.scale(exportScale, exportScale)
-
-    // redraw background + logo grid
-    o.fillStyle = '#000'; o.fillRect(0,0,out.width,out.height)
-    const cell = state.cellPx
-    // logo dots
-    o.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--logo').trim() || '#0ea5e9'
-    for(let y=0;y<state.gridRows;y++){
-      for(let x=0;x<state.gridCols;x++){
-        if(!state.grid || !state.grid[y][x]) continue
-        const cx = x*cell + cell/2
-        const cy = y*cell + cell/2
-        const r = Math.floor(cell*0.45)
-        o.beginPath(); o.arc(cx,cy,r,0,Math.PI*2); o.fill()
+      if(srcKind === 'url'){
+        grid = await buildGridFromUrl(ui.maskUrl.value.trim())
+        if(!grid){ statusEl.textContent = 'Mask yüklenemedi, metin fallback.'; grid = buildGridFromText(ui.textInput.value) }
+      } else if(srcKind === 'text'){
+        grid = buildGridFromText(ui.textInput.value)
+      } else if(srcKind === 'upload'){
+        const f = ui.fileGlobal.files && ui.fileGlobal.files[0]
+        if(!f){ statusEl.textContent = 'Bir görsel seçmelisin.'; grid = buildGridFromText(ui.textInput.value) }
+        else {
+          const url = URL.createObjectURL(f)
+          const img = new Image()
+          await new Promise((res)=>{ img.onload = () => res(); img.onerror = () => res(); img.src = url })
+          URL.revokeObjectURL(url)
+          grid = img.complete && img.naturalWidth ? buildGridFromImage(img) : buildGridFromText(ui.textInput.value)
+        }
       }
+
+      state.grid = grid || boolGrid(state.gridRows, state.gridCols, false)
+      drawGrid()
     }
-    // grid lines
-    o.strokeStyle = 'rgba(255,255,255,0.06)'; o.lineWidth = 1
-    for(let x=0;x<=state.gridCols;x++){ o.beginPath(); o.moveTo(x*cell,0); o.lineTo(x*cell,state.gridRows*cell); o.stroke() }
-    for(let y=0;y<=state.gridRows;y++){ o.beginPath(); o.moveTo(0,y*cell); o.lineTo(state.gridCols*cell,y*cell); o.stroke() }
-    // placements
-    for(const [key, meta] of state.placements.entries()){
-      const [x,y] = key.split(',').map(Number)
-      const cx = x*cell + cell/2, cy = y*cell + cell/2
-      const r = Math.max(2, cell*0.44)
-      if(meta.imageUrl){
-        const img = getImg(meta.imageUrl)
-        if(img && img.complete && img.naturalWidth){
-          o.save(); o.beginPath(); o.arc(cx, cy, r, 0, Math.PI*2); o.clip();
-          o.drawImage(img, cx-r, cy-r, r*2, r*2); o.restore();
-          o.strokeStyle = 'rgba(255,255,255,0.7)'; o.lineWidth = 1; o.beginPath(); o.arc(cx,cy,r-0.5,0,Math.PI*2); o.stroke();
+
+    // ---------- Selection & claim flow ----------
+    function pixelToCell(ev){
+      const rect = canvas.getBoundingClientRect()
+      const x = ev.clientX - rect.left
+      const y = ev.clientY - rect.top
+      const sx = Math.floor(x / (rect.width / state.gridCols))
+      const sy = Math.floor(y / (rect.height / state.gridRows))
+      return {x: Math.max(0, Math.min(state.gridCols-1, sx)), y: Math.max(0, Math.min(state.gridRows-1, sy))}
+    }
+    function openModal(){ modal.root.classList.add('show'); modal.root.setAttribute('aria-hidden','false') }
+    function closeModal(){ modal.root.classList.remove('show'); modal.root.setAttribute('aria-hidden','true'); modal.tw.value=''; modal.note.value=''; modal.file.value='' }
+
+    canvas.addEventListener('click', (ev) => {
+      const {x,y} = pixelToCell(ev)
+      if(!state.grid || !state.grid[y]?.[x]){ statusEl.textContent = 'Bu hücre logo alanında değil.'; return }
+      const key = x+','+y
+      if(state.placements.has(key)){ statusEl.textContent = 'Bu hücre zaten dolu.'; return }
+      state.selected = {x,y}
+      drawGrid()
+      openModal()
+    })
+
+    modal.cancel.addEventListener('click', () => { closeModal() })
+    modal.submit.addEventListener('click', async () => {
+      try{
+        if(!state.selected){ statusEl.textContent='Seçim yok.'; return }
+        const tw = (modal.tw.value||'').trim()
+        const note = (modal.note.value||'').trim()
+        const file = modal.file.files && modal.file.files[0]
+        window.__PENDING__ = { tw } // upload path için
+
+        if(!window.claimSelectedCell){ statusEl.textContent = 'Firestore bağlantısı yok.'; return }
+        await window.claimSelectedCell({ x: state.selected.x, y: state.selected.y, tw, note, file })
+        closeModal()
+        statusEl.textContent = 'Hücre yerleştirildi.'
+      }catch(e){ statusEl.textContent = 'Yerleştirme hatası: ' + (e?.message||e) }
+    })
+
+    // ---------- Export ----------
+    $('#btnDownload').addEventListener('click', () => {
+      const exportScale = 2
+      const out = document.createElement('canvas')
+      out.width = canvas.width * exportScale / DPR
+      out.height = canvas.height * exportScale / DPR
+      const o = out.getContext('2d')
+      o.scale(exportScale, exportScale)
+
+      o.fillStyle = '#000'; o.fillRect(0,0,out.width,out.height)
+      const cell = state.cellPx
+      // logo dots
+      o.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--logo').trim() || '#0ea5e9'
+      for(let y=0;y<state.gridRows;y++){
+        for(let x=0;x<state.gridCols;x++){
+          if(!state.grid || !state.grid[y][x]) continue
+          const cx = x*cell + cell/2
+          const cy = y*cell + cell/2
+          const r = Math.floor(cell*0.45)
+          o.beginPath(); o.arc(cx,cy,r,0,Math.PI*2); o.fill()
+        }
+      }
+      // grid lines
+      o.strokeStyle = 'rgba(255,255,255,0.06)'; o.lineWidth = 1
+      for(let x=0;x<=state.gridCols;x++){ o.beginPath(); o.moveTo(x*cell,0); o.lineTo(x*cell,state.gridRows*cell); o.stroke() }
+      for(let y=0;y<=state.gridRows;y++){ o.beginPath(); o.moveTo(0,y*cell); o.lineTo(state.gridCols*cell,y*cell); o.stroke() }
+      // placements
+      for(const [key, meta] of state.placements.entries()){
+        const [x,y] = key.split(',').map(Number)
+        const cx = x*cell + cell/2, cy = y*cell + cell/2
+        const r = Math.max(2, cell*0.44)
+        if(meta.imageUrl){
+          const img = getImg(meta.imageUrl)
+          if(img && img.complete && img.naturalWidth){
+            o.save(); o.beginPath(); o.arc(cx, cy, r, 0, Math.PI*2); o.clip();
+            o.drawImage(img, cx-r, cy-r, r*2, r*2); o.restore();
+            o.strokeStyle = 'rgba(255,255,255,0.7)'; o.lineWidth = 1; o.beginPath(); o.arc(cx,cy,r-0.5,0,Math.PI*2); o.stroke();
+          } else {
+            o.fillStyle = '#fff'; o.beginPath(); o.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); o.fill();
+          }
         } else {
           o.fillStyle = '#fff'; o.beginPath(); o.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); o.fill();
         }
-      } else {
-        o.fillStyle = '#fff'; o.beginPath(); o.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); o.fill();
       }
+
+      const a = document.createElement('a')
+      a.download = 'sentient-mosaic.png'
+      a.href = out.toDataURL('image/png')
+      a.click()
+    })
+
+    // ---------- UI wiring ----------
+    function setSrc(kind){
+      state.srcKind = kind
+      ui.rowUrl.style.display = kind==='url' ? '' : 'none'
+      ui.rowText.style.display = kind==='text' ? '' : 'none'
+      ui.rowUpload.style.display = kind==='upload' ? '' : 'none'
     }
+    ui.srcRadios().forEach(r => r.addEventListener('change', (e) => setSrc(e.target.value)))
+    ui.fontPx.addEventListener('input', () => { ui.fontPxVal.textContent = ui.fontPx.value; render() })
+    ui.thr.addEventListener('input', () => { ui.thrVal.textContent = ui.thr.value; render() })
+    ui.darkIsLogo.addEventListener('change', render)
+    ui.cols.addEventListener('input', () => { ui.colsLab.textContent = ui.cols.value; render() })
+    ui.rows.addEventListener('input', () => { ui.rowsLab.textContent = ui.rows.value; render() })
+    ui.cell.addEventListener('input', () => { ui.cellLab.textContent = ui.cell.value; render() })
+    ui.maskUrl.addEventListener('change', render)
+    ui.textInput.addEventListener('input', render)
+    ui.fileGlobal.addEventListener('change', render)
+    $('#btnRender').addEventListener('click', render)
+    window.addEventListener('resize', () => { setCanvasSize(); drawGrid() })
 
-    const a = document.createElement('a')
-    a.download = 'sentient-mosaic.png'
-    a.href = out.toDataURL('image/png')
-    a.click()
-  })
-
-  // ---------- UI wiring ----------
-  function setSrc(kind){
-    state.srcKind = kind
-    ui.rowUrl.style.display = kind==='url' ? '' : 'none'
-    ui.rowText.style.display = kind==='text' ? '' : 'none'
-    ui.rowUpload.style.display = kind==='upload' ? '' : 'none'
-  }
-
-  ui.srcRadios().forEach(r => r.addEventListener('change', (e) => setSrc(e.target.value)))
-
-  ui.fontPx.addEventListener('input', () => { ui.fontPxVal.textContent = ui.fontPx.value; render() })
-  ui.thr.addEventListener('input', () => { ui.thrVal.textContent = ui.thr.value; render() })
-  ui.darkIsLogo.addEventListener('change', render)
-  ui.cols.addEventListener('input', () => { ui.colsLab.textContent = ui.cols.value; render() })
-  ui.rows.addEventListener('input', () => { ui.rowsLab.textContent = ui.rows.value; render() })
-  ui.cell.addEventListener('input', () => { ui.cellLab.textContent = ui.cell.value; render() })
-  ui.maskUrl.addEventListener('change', render)
-  ui.textInput.addEventListener('input', render)
-  ui.fileGlobal.addEventListener('change', render)
-
-  $('#btnRender').addEventListener('click', render)
-  window.addEventListener('resize', () => { setCanvasSize(); drawGrid() })
-
-  // init
-  setSrc('url')
-  setCanvasSize()
-  render()
-
-  ;(async () => {
-    if (window.loadRemoteConfig) await window.loadRemoteConfig();
-    if (window.subscribePlacements) window.subscribePlacements();
+    // init
+    setSrc('url')
+    setCanvasSize()
+    render()
+    ;(async () => {
+      if (window.loadRemoteConfig) await window.loadRemoteConfig();
+      if (window.subscribePlacements) window.subscribePlacements();
+    })()
   })()
-})()
-</script>
+  </script>
 </body>
 </html>
