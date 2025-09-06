@@ -9,13 +9,12 @@
   :root{
     --bg:#000; --panel:#0b0b0f; --muted:#9aa3b2; --text:#e5e7eb;
     --primary:#4f46e5; --primary-2:#6366f1; --ok:#22c55e; --warn:#ef4444;
-    --grid:#262b3a;
   }
   *{box-sizing:border-box}
   body{
     margin:0;background:var(--bg);color:var(--text);
     font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto;
-    display:flex; align-items:flex-start; justify-content:center;
+    display:flex; justify-content:center;
   }
   .wrap{width:100%; max-width:1200px; margin:18px auto 40px; padding:0 16px}
   h1{font-size:28px;margin:2px 0 8px;text-align:center;font-weight:800}
@@ -33,7 +32,7 @@
   .board{background:var(--panel);border:1px dashed #2b3346;border-radius:14px;padding:12px}
   .canvas-wrap{
     position:relative;border:1px dashed #374055;border-radius:10px;
-    overflow:hidden; background:#000;   /* arkası saf siyah */
+    overflow:hidden; background:#000;
   }
   canvas{display:block;width:100%;height:auto}
   .zoom{position:absolute;top:6px;right:10px;display:flex;gap:6px}
@@ -68,11 +67,8 @@
 
     <div class="board">
       <div id="canvasWrap" class="canvas-wrap">
-        <!-- Arkaplan: logonun oval/akıcı görüntüsü burada -->
         <canvas id="bgCanvas"></canvas>
-        <!-- Lojik seçim için maskeyi tam çözünürlükte tuttuğumuz görünmez katman -->
         <canvas id="hitCanvas" style="display:none"></canvas>
-        <!-- Grid + karelerin boyandığı katman -->
         <canvas id="gridCanvas"></canvas>
 
         <div class="zoom">
@@ -107,7 +103,6 @@
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
 
-    // DOM
     const els = {
       state: document.getElementById('state'),
       username: document.getElementById('username'),
@@ -124,83 +119,90 @@
       zoomPct: document.getElementById('zoomPct'),
     };
 
-    // Durum
     let CFG = { cellPx:16, gridRows:40, gridCols:40, logoMaskUrl:"", mosaicOpen:false, maxClaimPerUser:1 };
     let scale = 1;
-    let selectable = [];      // boolean [gridRows][gridCols]
-    let taken = new Set();    // rezerve edilmiş hücre anahtarları
-    let picked = null;        // [r,c]
+    let selectable = [];
+    let taken = new Set();
+    let picked = null;
 
     const bgCtx   = els.bg.getContext('2d');
-    const hitCtx  = els.hit.getContext('2d');
+    const hitCtx  = els.hit.getContext('2d', { willReadFrequently:true });
     const gridCtx = els.grid.getContext('2d');
 
-    function boardSizePx(){ return [CFG.gridCols*CFG.cellPx, CFG.gridRows*CFG.cellPx]; }
+    const boardSizePx = () => [CFG.gridCols*CFG.cellPx, CFG.gridRows*CFG.cellPx];
 
     function setCanvasSize() {
       const [W,H] = boardSizePx();
       [els.bg, els.hit, els.grid].forEach(c=>{
         c.width  = Math.round(W * scale);
         c.height = Math.round(H * scale);
-        const ctx = c.getContext('2d');
-        ctx.setTransform(scale,0,0,scale,0,0);
+        c.getContext('2d').setTransform(scale,0,0,scale,0,0);
       });
       drawAll();
     }
 
-    // --- MASK İŞLEME (oval görüntü için piksel bazlı saydamlaştırma)
+    function drawMaskFaint(img){
+      const [W,H] = boardSizePx();
+      bgCtx.save();
+      bgCtx.setTransform(scale,0,0,scale,0,0);
+      bgCtx.clearRect(0,0,W,H);
+      bgCtx.fillStyle = "#000"; bgCtx.fillRect(0,0,W,H);
+      bgCtx.globalAlpha = 0.18;
+      bgCtx.imageSmoothingEnabled = false;
+      bgCtx.drawImage(img, 0,0, W,H);
+      bgCtx.restore();
+    }
+
     function processMaskToAlpha(img){
       const [W,H] = boardSizePx();
-
-      // Kaynak görüntüyü ölçekleyip işlemek için geçici kanvas
       const tmp = document.createElement('canvas');
       tmp.width = W; tmp.height = H;
       const tctx = tmp.getContext('2d', { willReadFrequently:true });
-      tctx.imageSmoothingEnabled = true;     // oval kenarlar daha akıcı görünsün
+      tctx.imageSmoothingEnabled = false; // kenar sızmasını önle
       tctx.drawImage(img, 0,0, W,H);
 
       const imgData = tctx.getImageData(0,0,W,H);
       const d = imgData.data;
 
-      // L<THRESHOLD -> siyah (opak), aksi halde şeffaf
-      const TH = 80; // eşik (maskene göre oynatabilirsin)
+      const TH = 128; // daha güvenli eşik
+      let opaqueCount = 0;
       for(let i=0;i<d.length;i+=4){
         const r=d[i], g=d[i+1], b=d[i+2];
         const L = 0.2126*r + 0.7152*g + 0.0722*b;
-        if(L < TH){           // siyah alan
-          d[i]=0; d[i+1]=0; d[i+2]=0; d[i+3]=255;   // tam siyah, opak
+        if(L < TH){ // siyah alan: opak siyah
+          d[i]=0; d[i+1]=0; d[i+2]=0; d[i+3]=255;
+          opaqueCount++;
         }else{
-          d[i+3]=0;                                   // tamamen şeffaf
+          d[i+3]=0; // tamamen şeffaf
         }
       }
       tctx.putImageData(imgData,0,0);
-      return tmp; // şeffaf zeminli, sadece siyah şekiller olan kanvas
+      console.log("Mask opaqueCount:", opaqueCount);
+      return { canvas: tmp, opaqueCount };
     }
 
     function drawMaskExact(maskCanvas){
       const [W,H] = boardSizePx();
-      // Arka siyah + maskeyi tam opak çiz
       bgCtx.save();
-      bgCtx.setTransform(1,0,0,1,0,0); // önce gerçek piksel alanı temizle
-      bgCtx.clearRect(0,0,els.bg.width, els.bg.height);
       bgCtx.setTransform(scale,0,0,scale,0,0);
-      bgCtx.imageSmoothingEnabled = true;
+      bgCtx.clearRect(0,0,W,H);
       bgCtx.fillStyle = "#000"; bgCtx.fillRect(0,0,W,H);
+      bgCtx.imageSmoothingEnabled = true;
       bgCtx.drawImage(maskCanvas, 0,0, W,H);
       bgCtx.restore();
     }
 
     function buildSelectableFromHit(){
       const [W,H] = boardSizePx();
-      const data = hitCtx.getImageData(0,0,W,H).data;
       selectable = Array.from({length:CFG.gridRows}, ()=>Array(CFG.gridCols).fill(false));
+      const data = hitCtx.getImageData(0,0,W,H).data;
       for(let r=0; r<CFG.gridRows; r++){
         for(let c=0; c<CFG.gridCols; c++){
-          const cx = Math.floor(c*CFG.cellPx + CFG.cellPx/2);
-          const cy = Math.floor(r*CFG.cellPx + CFG.cellPx/2);
+          const cx = (c*CFG.cellPx + (CFG.cellPx>>1))|0;
+          const cy = (r*CFG.cellPx + (CFG.cellPx>>1))|0;
           const idx = (cy*W + cx) * 4;
-          const A = data[idx+3];                 // işlenmiş maskede siyah şekiller opak
-          selectable[r][c] = (A > 10);           // opaksa seçilebilir
+          const A = data[idx+3];
+          selectable[r][c] = (A > 10);
         }
       }
     }
@@ -209,27 +211,22 @@
       const [W,H] = boardSizePx();
       gridCtx.clearRect(0,0,W,H);
 
-      // Seçilebilir kareleri tonu düşük mavi ile göster
+      // Seçilebilir kareler
       for(let r=0; r<CFG.gridRows; r++){
         for(let c=0; c<CFG.gridCols; c++){
           const x = c*CFG.cellPx, y=r*CFG.cellPx;
           const key = r+"_"+c;
-          const isTaken = taken.has(key);
-          const isSel = selectable[r][c];
-
-          if(isTaken){
+          if(taken.has(key)){
             gridCtx.fillStyle = "rgba(239,68,68,.55)";
             gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
-          } else if(isSel){
+          } else if(selectable[r][c]){
             gridCtx.fillStyle = "rgba(14,165,233,.35)";
             gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
           }
-          // zemin için ayrıca dolgu yok: arka zaten #000 + gerçek maskeyi görüyoruz
         }
       }
 
-      // Izgara çizgileri
-      gridCtx.strokeStyle = "rgba(100,116,139,.28)";
+      gridCtx.strokeStyle = "rgba(148,163,184,.25)"; // grid daha görünür
       gridCtx.lineWidth = 1;
       for(let c=0; c<=CFG.gridCols; c++){
         const x = c*CFG.cellPx + .5;
@@ -240,7 +237,6 @@
         gridCtx.beginPath(); gridCtx.moveTo(0,y); gridCtx.lineTo(W,y); gridCtx.stroke();
       }
 
-      // Seçili hücre çerçevesi
       if(picked){
         gridCtx.strokeStyle = "#60a5fa";
         gridCtx.lineWidth = 2;
@@ -250,7 +246,7 @@
 
     function drawAll(){ drawGrid(); }
 
-    // Etkileşim
+    // etkileşim
     els.grid.addEventListener('click', (ev)=>{
       const rect = els.grid.getBoundingClientRect();
       const x = (ev.clientX - rect.left) / scale;
@@ -274,7 +270,7 @@
       alert("Demo: Hücre ("+picked.join(",")+") rezerve edilmiş varsayıldı.");
     });
 
-    // === Yükleme akışı
+    // yükleme
     (async ()=>{
       const snap = await getDoc(doc(db,'settings','config'));
       if(!snap.exists()){ alert("settings/config bulunamadı."); return; }
@@ -296,23 +292,51 @@
       img.onload = ()=>{
         const [W,H] = boardSizePx();
 
-        // 1) Maskeyi işleyip arkası şeffaf, şekiller siyah hale getir
-        const processed = processMaskToAlpha(img);
+        // 1) İşlemeyi dene
+        const {canvas:processed, opaqueCount} = processMaskToAlpha(img);
 
-        // 2) BG: tam siyah zemin + logonun gerçek (oval) görünüşü
-        drawMaskExact(processed);
+        if(opaqueCount > 0){
+          // a) Arka plan: siyah + işlenmiş siyah şekiller (oval)
+          drawMaskExact(processed);
 
-        // 3) HitCanvas: seçim haritası için aynı işlenmiş maskeyi bas
-        els.hit.width = W; els.hit.height = H;
-        hitCtx.setTransform(1,0,0,1,0,0);
-        hitCtx.clearRect(0,0,W,H);
-        hitCtx.drawImage(processed, 0,0, W,H);
+          // b) HitCanvas: seçim haritası
+          els.hit.width = W; els.hit.height = H;
+          hitCtx.setTransform(1,0,0,1,0,0);
+          hitCtx.clearRect(0,0,W,H);
+          hitCtx.drawImage(processed, 0,0, W,H);
 
-        // 4) Seçilebilir kare haritasını oluştur ve çiz
-        buildSelectableFromHit();
-        drawAll();
+          buildSelectableFromHit();
+          drawAll();
+        }else{
+          // Fallback: maskeyi soluk çiz, seçimleri gri/-siyah eşikten üret
+          console.warn("Processed mask empty; falling back to faint mode");
+          drawMaskFaint(img);
+
+          els.hit.width = W; els.hit.height = H;
+          hitCtx.setTransform(1,0,0,1,0,0);
+          hitCtx.imageSmoothingEnabled = false;
+          hitCtx.clearRect(0,0,W,H);
+          hitCtx.drawImage(img, 0,0, W,H);
+
+          // hit üzerinden luminansla seçilebilirlik
+          const data = hitCtx.getImageData(0,0,W,H).data;
+          selectable = Array.from({length:CFG.gridRows}, ()=>Array(CFG.gridCols).fill(false));
+          const TH2 = 128;
+          for(let r=0; r<CFG.gridRows; r++){
+            for(let c=0; c<CFG.gridCols; c++){
+              const cx = (c*CFG.cellPx + (CFG.cellPx>>1))|0;
+              const cy = (r*CFG.cellPx + (CFG.cellPx>>1))|0;
+              const idx = (cy*W + cx) * 4;
+              const r0=data[idx], g0=data[idx+1], b0=data[idx+2];
+              const L = 0.2126*r0 + 0.7152*g0 + 0.0722*b0;
+              selectable[r][c] = (L < TH2);
+            }
+          }
+          drawAll();
+        }
       };
-      img.src = CFG.logoMaskUrl;   // ör: /mask.png
+      console.log("Mask URL:", CFG.logoMaskUrl);
+      img.src = CFG.logoMaskUrl;
     })();
   </script>
 </body>
