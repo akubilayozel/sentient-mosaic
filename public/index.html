@@ -1,335 +1,273 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sentient Mosaic</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#0b0b0f; --panel:#111318; --muted:#9aa3b2; --text:#e5e7eb;
-    --primary:#4f46e5; --primary-2:#6366f1; --ok:#22c55e; --warn:#ef4444;
-    --grid:#262b3a;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
-  .wrap{max-width:1200px;margin:0 auto;padding:16px}
-  h1{font-size:28px;margin:8px 0 6px;text-align:center;font-weight:800}
-  .sub{opacity:.85;text-align:center;margin:0 0 16px}
-  .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0 18px}
-  input[type="text"], textarea{
-    background:#0f1117;border:1px solid #1f2533;color:var(--text);
-    border-radius:10px;padding:10px 12px;outline:none
-  }
-  input[type="text"]{width:220px}
-  textarea{width:320px;height:36px;resize:vertical}
-  input[type="file"]{color:var(--muted)}
-  button{background:var(--primary);border:0;color:#fff;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
-  button:hover{background:var(--primary-2)}
-  .board{background:var(--panel);border:1px dashed #2b3346;border-radius:14px;padding:10px}
-  .canvas-wrap{
-    position:relative;border:1px dashed #374055;border-radius:10px;overflow:hidden;
-    /* ortalamak için */
-    margin:0 auto; max-width:900px; background:#000;
-  }
-  canvas{display:block;width:100%;height:auto;image-rendering:pixelated}
-  .zoom{position:absolute;top:6px;right:10px;display:flex;gap:6px}
-  .zoom button{padding:4px 10px;border-radius:8px}
-  .legend{margin-top:8px;text-align:center;color:var(--muted);font-size:13px}
-  .pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;margin:0 4px}
-  .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
-  .sel{background:#0ea5e9}
-  .closed{background:#64748b}
-  .taken{background:#ef4444}
-  .note{color:var(--muted);text-align:center;margin:8px 0 2px}
-  .state-ok{color:var(--ok);font-weight:700}
-  .state-off{color:var(--warn);font-weight:700}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sentient Mosaic</title>
+  <style>
+    :root {
+      --bg: #000;          /* arka plan siyah */
+      --tile: #0ea5e9;     /* logo içi karo rengi (cyan) */
+      --grid: #1b2530;     /* ince kılavuz rengi (çok koyu) */
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: #cbd5e1;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      width: min(1200px, 96vw);
+      justify-content: center;
+    }
+    .pill {
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: #111827;
+      border: 1px solid #1f2937;
+      color: #e5e7eb;
+      font-size: 12px;
+    }
+    .btn {
+      background: #6366f1;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .stage {
+      width: min(1200px, 96vw);
+      aspect-ratio: 1 / 1;
+      position: relative;
+      border-radius: 16px;
+      border: 1px dashed #334155;
+      overflow: hidden;
+      background: #000; /* logo dışı alanlar zaten siyah kalacak */
+      box-shadow: 0 0 0 1px #0b1220 inset;
+    }
+    canvas { width: 100%; height: 100%; display:block; }
+    .hint {
+      font-size: 12px;
+      color: #94a3b8;
+      opacity: .8;
+      text-align: center;
+    }
+    .badge {
+      font-size: 11px; background:#111827; border:1px solid #1f2937; padding:2px 8px; border-radius:999px;
+    }
+  </style>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="wrap">
-    <h1>Sentient Mosaic</h1>
-    <div class="sub">Topluluk profillerinden piksel mozaik —
-      <span id="state" class="state-off">…</span>
-      <span id="src" style="opacity:.65"></span>
+    <div class="toolbar">
+      <span class="pill">Topluluk profillerinden piksel mozaik — <span id="cfgSource" class="badge">yükleniyor…</span></span>
+      <button id="btnRedraw" class="btn" disabled>Yeniden çiz</button>
     </div>
 
-    <div class="row">
-      <input id="username" type="text" placeholder="Twitter kullanıcı adı">
-      <input id="file" type="file" accept="image/png, image/jpeg">
-      <textarea id="note" placeholder="Dobby'e notun (128 karakter)"></textarea>
-      <button id="clearSel">Seçimi temizle</button>
-      <button id="placeBtn">Seçilen hücreye yerleştir</button>
+    <div class="stage">
+      <canvas id="gridCanvas"></canvas>
     </div>
 
-    <p class="note">Bir hücre seçmek için mozaikte <b>logonun siyah alanına</b> tıkla. (Her kullanıcı en fazla 1 hücre alabilir)</p>
-
-    <div class="board">
-      <div id="canvasWrap" class="canvas-wrap">
-        <canvas id="bgCanvas"></canvas>
-        <canvas id="hitCanvas" style="display:none"></canvas>
-        <canvas id="gridCanvas"></canvas>
-
-        <div class="zoom">
-          <button id="zoomIn">+</button>
-          <button id="zoomOut">–</button>
-          <span id="zoomPct" style="margin-left:6px;color:#cbd5e1;font-weight:700">%100</span>
-        </div>
-      </div>
-      <div class="legend">
-        Açıklama:
-        <span class="pill"><span class="dot sel"></span>Seçilebilir</span>
-        <span class="pill"><span class="dot closed"></span>Kapalı (zemin)</span>
-        <span class="pill"><span class="dot taken"></span>Dolu</span>
-      </div>
+    <div class="hint">
+      Logo dışı alan siyah, logo içi hücreler yuvarlatılmış karolar olarak çizilir. (Veri: <code>settings/config</code>)
     </div>
   </div>
 
-  <!-- Firebase v10 -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-    // --- Firebase config
+  <script>
+    /************* 1) Firebase init (KENDİ PROJE AYARLARINIZI DOLDURUN) *************/
     const firebaseConfig = {
-      apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb3OE",
-      authDomain: "sentient-mosaic.firebaseapp.com",
-      projectId: "sentient-mosaic",
-      storageBucket: "sentient-mosaic.firebasestorage.app",
-      messagingSenderId: "270660218350",
-      appId: "1:270660218350:web:4882d74709e8bfcbff72ff",
-      measurementId: "G-526BY2M6TP"
+      /* SİZE AİT CONFIG */
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      // vs...
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    /************* 2) Global durum *************/
+    const state = {
+      cfg: null,          // firestore config
+      maskImg: null,      // HTMLImageElement
+      isReady: false,     // her şey yüklendi mi?
+      maskReady: false,   // maske offscreen’a işlendi mi?
+      isSolid: null       // (r,c) -> boolean (logo içi mi?)
     };
 
-    // --- DOM
     const els = {
-      state: document.getElementById('state'),
-      src: document.getElementById('src'),
-      username: document.getElementById('username'),
-      file: document.getElementById('file'),
-      note: document.getElementById('note'),
-      clearSel: document.getElementById('clearSel'),
-      placeBtn: document.getElementById('placeBtn'),
-      bg: document.getElementById('bgCanvas'),
-      hit: document.getElementById('hitCanvas'),
-      grid: document.getElementById('gridCanvas'),
-      wrap: document.getElementById('canvasWrap'),
-      zoomIn: document.getElementById('zoomIn'),
-      zoomOut: document.getElementById('zoomOut'),
-      zoomPct: document.getElementById('zoomPct'),
+      canvas: document.getElementById('gridCanvas'),
+      btnRedraw: document.getElementById('btnRedraw'),
+      cfgSource: document.getElementById('cfgSource'),
     };
+    const ctx = els.canvas.getContext('2d');
 
-    // --- Vars
-    const defaultCfg = { cellPx:16, gridRows:40, gridCols:40, logoMaskUrl:"/mask.png", mosaicOpen:true, maxClaimPerUser:1 };
-    let CFG = structuredClone(defaultCfg);
-    let scale = 1;
-    let selectable = [];
-    let taken = new Set();
-    let picked = null;
+    /************* 3) Yardımcılar *************/
+    function roundRectPath(ctx, x, y, w, h, r) {
+      r = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
-
-    const bgCtx   = els.bg.getContext('2d');
-    const hitCtx  = els.hit.getContext('2d');
-    const gridCtx = els.grid.getContext('2d');
-
-    function setCanvasSize() {
-      const w = CFG.gridCols * CFG.cellPx;
-      const h = CFG.gridRows * CFG.cellPx;
-
-      [els.bg, els.hit, els.grid].forEach(c=>{
-        c.width  = Math.round(w * scale);
-        c.height = Math.round(h * scale);
-        const ctx = c.getContext('2d');
-        ctx.setTransform(scale,0,0,scale,0,0);
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        // Cache-bust, CDN/Vercel’de 304 olsa da data güncel kalsın:
+        img.src = src + (src.includes('?') ? '&' : '?') + 'v=' + Date.now();
+        img.onload = () => resolve(img);
+        img.onerror = (e) => reject(e);
       });
-      drawAll();
     }
 
-    function drawMaskFaint(img){
-      const w = CFG.gridCols * CFG.cellPx;
-      const h = CFG.gridRows * CFG.cellPx;
-      bgCtx.save();
-      bgCtx.clearRect(0,0,w,h);
-
-      // arkaplanı siyah tut
-      bgCtx.fillStyle = "#000";
-      bgCtx.fillRect(0,0,w,h);
-
-      // maskeyi çok hafif griyle göster (silüet)
-      bgCtx.globalAlpha = 0.16; // beyaz alan hafif gri görünsün
-      bgCtx.imageSmoothingEnabled = false;
-      bgCtx.drawImage(img, 0,0, w,h);
-      bgCtx.restore();
+    async function loadConfig() {
+      const snap = await db.collection('settings').doc('config').get();
+      const data = snap.exists ? snap.data() : {};
+      // Varsayılanlar
+      const cfg = {
+        gridCols: Number(data.gridCols) || 40,
+        gridRows: Number(data.gridRows) || 40,
+        cellPx:  Number(data.cellPx)  || 16,
+        logoMaskUrl: data.logoMaskUrl || '/mask.png',
+        mosaicOpen: data.mosaicOpen !== false,
+        maxClaimPerUser: Number(data.maxClaimPerUser || 1)
+      };
+      state.cfg = cfg;
+      els.cfgSource.textContent = 'Firestore';
+      console.log('CFG source: firestore');
+      console.log('Mask URL :', cfg.logoMaskUrl);
+      return cfg;
     }
 
-    function drawGrid(){
-      const W = CFG.gridCols * CFG.cellPx;
-      const H = CFG.gridRows * CFG.cellPx;
+    function buildMaskBitmap() {
+      const {gridCols, gridRows, cellPx} = state.cfg;
+      // Offscreen boyut: grid çözünürlüğü (pürüzsüz eşleme)
+      const W = gridCols * cellPx;
+      const H = gridRows * cellPx;
+      const off = document.createElement('canvas');
+      off.width = W; off.height = H;
+      const octx = off.getContext('2d');
 
-      gridCtx.clearRect(0,0,W,H);
+      // Arka plan beyaz, maske siyah (mask.png öyle)
+      octx.fillStyle = '#fff';
+      octx.fillRect(0,0,W,H);
 
-      for(let r=0; r<CFG.gridRows; r++){
-        for(let c=0; c<CFG.gridCols; c++){
-          const x = c*CFG.cellPx, y=r*CFG.cellPx;
-          const key = r+"_"+c;
-          const isTaken = taken.has(key);
-          const isSel = selectable[r][c];
+      const img = state.maskImg;
+      // contain
+      const scale = Math.min(W / img.width, H / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      const dx = (W - dw) / 2;
+      const dy = (H - dh) / 2;
+      octx.drawImage(img, dx, dy, dw, dh);
 
-          if(isTaken){
-            gridCtx.fillStyle = "rgba(239,68,68,.60)"; // dolu (kırmızı)
-            gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
-          } else if(isSel){
-            gridCtx.fillStyle = "rgba(14,165,233,.40)"; // siyah alan (seçilebilir) mavi vurgulu
-            gridCtx.fillRect(x,y,CFG.cellPx,CFG.cellPx);
-          } else {
-            // zemin (beyaz alan) simetrik olarak tamamen siyah kalsın
-            // (arka plan zaten siyah, burada ekstra doldurmaya gerek yok)
+      const data = octx.getImageData(0,0,W,H).data;
+
+      // Hücre merkezinden alpha örnekle: alpha < 128 => siyah kısım (logo içi)
+      state.isSolid = (r,c) => {
+        const cx = Math.floor((c + 0.5) * cellPx);
+        const cy = Math.floor((r + 0.5) * cellPx);
+        const idx = (cy * W + cx) * 4 + 3;   // alpha kanalı
+        const a = data[idx] ?? 255;
+        return a < 128;
+      };
+
+      state.maskReady = true;
+      console.log('mask ready', {W,H,dw,dh,dx,dy});
+    }
+
+    function setCanvasToGridSize() {
+      const {gridCols, gridRows, cellPx} = state.cfg;
+      els.canvas.width = gridCols * cellPx;
+      els.canvas.height = gridRows * cellPx;
+    }
+
+    function draw() {
+      if (!state.cfg || !state.maskReady) return;
+
+      setCanvasToGridSize();
+      const {gridCols, gridRows, cellPx} = state.cfg;
+
+      // Arka plan (logo dışı siyah)
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
+
+      // İsteğe bağlı çok hafif grid kılavuzu
+      ctx.strokeStyle = 'rgba(51,65,85,.25)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= gridCols; x++) {
+        const px = x * cellPx + .5;
+        ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, els.canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y <= gridRows; y++) {
+        const py = y * cellPx + .5;
+        ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(els.canvas.width, py); ctx.stroke();
+      }
+
+      // Logo içi hücreler: yuvarlatılmış karolar
+      const pad = Math.max(1, Math.floor(cellPx * 0.12));     // iç boşluk
+      const r   = Math.floor(cellPx * 0.35);                   // köşe yarıçapı
+      ctx.fillStyle = getComputedStyle(document.documentElement)
+                      .getPropertyValue('--tile').trim() || '#0ea5e9';
+
+      for (let rrow = 0; rrow < gridRows; rrow++) {
+        for (let ccol = 0; ccol < gridCols; ccol++) {
+          if (state.isSolid(rrow, ccol)) {
+            const x = ccol * cellPx + pad;
+            const y = rrow * cellPx + pad;
+            const w = cellPx - pad * 2;
+            const h = cellPx - pad * 2;
+            roundRectPath(ctx, x, y, w, h, r);
+            ctx.fill();
           }
         }
       }
+    }
 
-      // Izgara çizgileri
-      gridCtx.strokeStyle = "rgba(55,65,81,.38)";
-      gridCtx.lineWidth = 1;
-      for(let c=0; c<=CFG.gridCols; c++){
-        const x = c*CFG.cellPx + .5;
-        gridCtx.beginPath(); gridCtx.moveTo(x,0); gridCtx.lineTo(x,H); gridCtx.stroke();
-      }
-      for(let r=0; r<=CFG.gridRows; r++){
-        const y = r*CFG.cellPx + .5;
-        gridCtx.beginPath(); gridCtx.moveTo(0,y); gridCtx.lineTo(W,y); gridCtx.stroke();
-      }
-
-      if(picked){
-        gridCtx.strokeStyle = "#60a5fa";
-        gridCtx.lineWidth = 2;
-        gridCtx.strokeRect(picked[1]*CFG.cellPx+1, picked[0]*CFG.cellPx+1, CFG.cellPx-2, CFG.cellPx-2);
+    async function boot() {
+      try {
+        els.btnRedraw.disabled = true;
+        const cfg = await loadConfig();
+        state.maskImg = await loadImage(cfg.logoMaskUrl);
+        buildMaskBitmap();
+        draw();
+        els.btnRedraw.disabled = false;
+      } catch (err) {
+        console.error(err);
+        els.cfgSource.textContent = 'Hata';
       }
     }
 
-    function drawAll(){ drawGrid(); }
+    /************* 4) Olaylar *************/
+    window.addEventListener('load', boot);
+    els.btnRedraw.addEventListener('click', () => draw());
+    // (Boyut değişse de canvas kendi grid boyutunda; CSS ile orantılı büyüyüp küçülür)
 
-    function luminance(r,g,b){ return 0.2126*r + 0.7152*g + 0.0722*b; }
-
-    function buildSelectableFromMask(){
-      const W = CFG.gridCols * CFG.cellPx;
-      const H = CFG.gridRows * CFG.cellPx;
-      const data = hitCtx.getImageData(0,0,W,H).data;
-
-      selectable = Array.from({length:CFG.gridRows}, ()=>Array(CFG.gridCols).fill(false));
-
-      for(let r=0; r<CFG.gridRows; r++){
-        for(let c=0; c<CFG.gridCols; c++){
-          const cx = Math.floor(c*CFG.cellPx + CFG.cellPx/2);
-          const cy = Math.floor(r*CFG.cellPx + CFG.cellPx/2);
-          const idx = (cy*W + cx) * 4;
-          const R = data[idx], G = data[idx+1], B = data[idx+2], A = data[idx+3];
-          if(A < 10){ selectable[r][c] = false; continue; }
-          const L = luminance(R,G,B);
-          selectable[r][c] = (L < 60); // siyah alan eşik
-        }
-      }
-    }
-
-    // --- Interaction
-    els.grid.addEventListener('click', (ev)=>{
-      const rect = els.grid.getBoundingClientRect();
-      const x = (ev.clientX - rect.left) / scale;
-      const y = (ev.clientY - rect.top) / scale;
-      const c = Math.floor(x / CFG.cellPx);
-      const r = Math.floor(y / CFG.cellPx);
-      if(r<0||c<0||r>=CFG.gridRows||c>=CFG.gridCols) return;
-      if(!selectable[r][c]) return;
-      picked = [r,c];
-      drawAll();
-    });
-
-    els.clearSel.addEventListener('click', ()=>{ picked=null; drawAll(); });
-    els.zoomIn.addEventListener('click', ()=>{ scale = Math.min(2.5, +(scale+0.1).toFixed(2)); els.zoomPct.textContent = "%"+Math.round(scale*100); setCanvasSize(); });
-    els.zoomOut.addEventListener('click', ()=>{ scale = Math.max(0.5, +(scale-0.1).toFixed(2)); els.zoomPct.textContent = "%"+Math.round(scale*100); setCanvasSize(); });
-
-    els.placeBtn.addEventListener('click', ()=>{
-      if(!picked) return alert("Önce logonun siyah alanından bir hücre seçin.");
-      if(!els.username.value.trim()) return alert("Twitter kullanıcı adını girin.");
-      if(!els.file.files[0]) return alert("Profil görselini yükleyin.");
-      alert(`Demo: Hücre (${picked.join(",")}) rezerve edilmiş varsayıldı.`);
-    });
-
-    // --- Load helpers
-    async function loadConfig() {
-      try{
-        const snap = await getDoc(doc(db,'settings','config'));
-        if(!snap.exists()) throw new Error("settings/config bulunamadı");
-        const d = snap.data();
-        CFG.cellPx         = +d.cellPx || defaultCfg.cellPx;
-        CFG.gridRows       = +d.gridRows || defaultCfg.gridRows;
-        CFG.gridCols       = +d.gridCols || defaultCfg.gridCols;
-        CFG.logoMaskUrl    = d.logoMaskUrl || defaultCfg.logoMaskUrl;
-        CFG.mosaicOpen     = (d.mosaicOpen !== undefined)? !!d.mosaicOpen : defaultCfg.mosaicOpen;
-        CFG.maxClaimPerUser= +d.maxClaimPerUser || defaultCfg.maxClaimPerUser;
-        els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
-        els.state.className = CFG.mosaicOpen ? "state-ok" : "state-off";
-        els.src.textContent = " • CFG source: Firestore";
-        console.log("CFG source: firestore");
-      }catch(err){
-        // Yedek ayarlar
-        CFG = structuredClone(defaultCfg);
-        els.state.textContent = CFG.mosaicOpen ? "Açık" : "Kapalı";
-        els.state.className = CFG.mosaicOpen ? "state-ok" : "state-off";
-        els.src.textContent = " • CFG source: Fallback";
-        console.warn("CFG source: fallback. Reason:", err?.message || err);
-      }
-    }
-
-    function loadMask(url){
-      return new Promise((resolve,reject)=>{
-        const img = new Image();
-        img.onload = ()=>resolve(img);
-        img.onerror = reject;
-        img.crossOrigin = "anonymous";
-        img.src = url;
-      });
-    }
-
-    // --- Main
-    (async ()=>{
-      await loadConfig();
-      console.log("Mask URL:", CFG.logoMaskUrl);
-
-      // Kanvas boyutları
-      setCanvasSize();
-
-      // Maskeyi yükle (başarısız olursa fallback /mask.png)
-      let img = null;
-      try{
-        img = await loadMask(CFG.logoMaskUrl);
-      }catch(e){
-        console.warn("Maskeyi yükleyemedim, /mask.png ile deniyorum…", e?.message||e);
-        img = await loadMask("/mask.png");
-      }
-
-      // Hit-canvas: maskeyi tam çözünürlükte tut
-      const W = CFG.gridCols * CFG.cellPx;
-      const H = CFG.gridRows * CFG.cellPx;
-      els.hit.width = W; els.hit.height = H;
-      hitCtx.setTransform(1,0,0,1,0,0);
-      hitCtx.imageSmoothingEnabled = false;
-      hitCtx.clearRect(0,0,W,H);
-      hitCtx.drawImage(img, 0,0, W,H);
-
-      // Arka plana silüet
-      drawMaskFaint(img);
-
-      // Seçilebilir hücre haritası
-      buildSelectableFromMask();
-
-      // Çiz
-      drawAll();
-    })();
   </script>
 </body>
 </html>
