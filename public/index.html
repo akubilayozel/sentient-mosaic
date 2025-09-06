@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sentient Mosaic — claims + storage</title>
+  <title>Sentient Mosaic</title>
   <style>
     :root{--bg:#000;--panel:#0f1115;--ring:#222531;--muted:#9aa3a9;--text:#e5e7eb;--accent:#6366f1;--logo:#0ea5e9}
     *{box-sizing:border-box}
@@ -22,8 +22,6 @@
     canvas{display:block;background:#000;border-radius:10px}
     .legend{color:var(--muted);font-size:12px;text-align:center}
     .status{font-size:12px;color:#fca5a5;text-align:center;min-height:18px}
-    .pill{padding:2px 8px;border-radius:999px;background:#11162a;border:1px solid #1d2440;color:#9fb4ff;font-size:11px}
-    .sp{flex:1}
 
     /* Modal */
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:50}
@@ -43,8 +41,11 @@
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
     import { getStorage, ref as sref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCSwMcRcmX1FyS3D1EJ3J8Bk1Ky3_Fb30E",
+    // --- Firebase config ---
+    // Not: API key hatası olursa bu blok, anahtarı hızlıca girebilmen için prompt açar ve
+    // localStorage'a kaydeder. Böylece dosyayı tekrar düzenlemen gerekmez.
+    const DEFAULT_FB = {
+      apiKey: "AIzaSyCSwMcRcmX1FyS3D1EJ3J8Bk1Ky3_Fb30E",  // Gerekirse prompt ile üzerine yazılacak
       authDomain: "sentient-mosaic.firebaseapp.com",
       projectId: "sentient-mosaic",
       storageBucket: "sentient-mosaic.appspot.com",
@@ -52,17 +53,48 @@
       appId: "1:270660218350:web:4882d74709e8bfcbbf72ff",
       measurementId: "G-52B6Y2M6TP"
     };
+    const SAVED = (()=>{ try{ return JSON.parse(localStorage.getItem("SM_FB_CFG")||"null"); }catch{ return null }})();
+    const firebaseConfig = SAVED ? { ...DEFAULT_FB, ...SAVED } : DEFAULT_FB;
 
-    // Init
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-    const storage = getStorage(app);
-    await signInAnonymously(auth);
-    window.__FB__ = { app, db, auth, storage };
+    let app, db, auth, storage;
+    let FB_READY = false;
+
+    async function initFirebase(){
+      try{
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        storage = getStorage(app);
+        await signInAnonymously(auth);
+        FB_READY = true;
+        window.__FB__ = { app, db, auth, storage };
+        console.log("Firebase ready");
+      }catch(e){
+        console.warn("Firebase init/signIn error:", e?.code || e?.message || e);
+        FB_READY = false;
+        window.__FB__ = undefined;
+        const needsKey = (e?.code || e?.message || "").toString().includes("api-key");
+        const msg = needsKey
+          ? "Firebase API key geçersiz. Lütfen Web API Key değerini girin."
+          : "Firestore bağlantısı yok.";
+        document.querySelector("#status").textContent = msg;
+
+        // Hızlı çözüm: API key sor → kaydet → sayfayı yenile
+        if(needsKey){
+          const k = prompt("Firebase Web API Key (Project settings ▸ General sayfasındaki değer):", "");
+          if(k && k.trim()){
+            const next = { ...firebaseConfig, apiKey: k.trim() };
+            localStorage.setItem("SM_FB_CFG", JSON.stringify(next));
+            location.reload();
+          }
+        }
+      }
+    }
+    await initFirebase();
 
     // settings/config (opsiyonel)
     window.loadRemoteConfig = async () => {
+      if(!FB_READY) return;
       try {
         const snap = await getDoc(doc(db, "settings", "config"));
         if (snap.exists()) {
@@ -73,6 +105,7 @@
 
     // Realtime placements
     window.subscribePlacements = () => {
+      if(!FB_READY) return () => {};
       const colRef = collection(db, "placements");
       return onSnapshot(colRef, (qs) => {
         if (!window.__STATE__?.placements) return;
@@ -87,7 +120,7 @@
 
     // Görseli Storage'a yükle → URL döndür (orijinal uzantıyı koru)
     async function uploadPlacementImage({ x, y, uid, file }) {
-      if (!file) return null;
+      if (!FB_READY || !file) return null;
       const ext = (file.type || "").includes("png") ? "png"
                 : (file.type || "").includes("jpeg") ? "jpg"
                 : (file.type || "").includes("webp") ? "webp"
@@ -101,6 +134,7 @@
 
     // Hücre claim (tek hak) + imageUrl kaydı
     window.claimSelectedCell = async ({ x, y, tw = "", note = "", file }) => {
+      if(!FB_READY) throw new Error("Firestore bağlantısı yok.");
       const user = auth.currentUser;
       if (!user) throw new Error("Anonymous auth yok.");
 
@@ -124,17 +158,18 @@
   <div class="wrap">
     <div class="toolbar">
       <div class="row">
-        <span class="pill">Kaynak</span>
         <label><input type="radio" name="src" value="url" checked> Mask URL</label>
         <label><input type="radio" name="src" value="text"> Metin</label>
         <label><input type="radio" name="src" value="upload"> Görsel yükle</label>
-        <span class="sp"></span>
+        <span style="flex:1"></span>
         <label><input id="darkIsLogo" type="checkbox" checked> Koyu piksel = logo</label>
         <label> Eşik <input id="thr" type="range" min="0" max="255" value="100"> <span id="thrVal">100</span></label>
       </div>
       <div class="row" id="rowUrl">
         <label>Mask URL</label>
         <input id="maskUrl" type="url" value="mask.png" placeholder="mask.png veya https://..." />
+        <button id="btnRender" class="btn primary">Yeniden oluştur</button>
+        <button id="btnDownload" class="btn">PNG indir</button>
       </div>
       <div class="row" id="rowText" style="display:none">
         <label>Metin</label>
@@ -149,9 +184,6 @@
         <input id="cols" type="range" min="16" max="96" value="40">
         <input id="rows" type="range" min="16" max="96" value="40">
         <input id="cell" type="range" min="8" max="30" value="16">
-        <span class="sp"></span>
-        <button id="btnRender" class="btn primary">Yeniden oluştur</button>
-        <button id="btnDownload" class="btn">PNG indir</button>
       </div>
       <div class="hint">Sadece <b>mavi</b> (logo) hücreler tıklanabilir. Harici maskelerde CORS sorunu olursa <b>Metin</b> ya da <b>Görsel yükle</b> kullan.</div>
     </div>
@@ -321,7 +353,7 @@
         for(let x=0;x<cols;x++){
           const i = (y*cols + x)*4
           const r = data[i], g=data[i+1], b=data[i+2], a=data[i+3]
-          const L = 0.2126*r + 0.7152*g + 0.0722%b
+          const L = 0.2126*r + 0.7152*g + 0.0722*b
           let isLogo
           if(darkIsLogo){ isLogo = (a>40) && (L <= T) } else { isLogo = (a>40) && (L >= (255 - T)) }
           grid[y][x] = !!isLogo
@@ -353,16 +385,24 @@
     }
     function buildGridFromUrl(url){
       return new Promise((resolve) => {
-        const img = new Image()
+        const img = new Image();
         try {
-          const link = document.createElement('a'); link.href = url
-          const sameOrigin = (link.origin === window.location.origin)
-          if(!sameOrigin) img.crossOrigin = 'anonymous'
+          const link = document.createElement('a'); link.href = url;
+          const sameOrigin = (link.origin === window.location.origin);
+          if (!sameOrigin) img.crossOrigin = 'anonymous';
         } catch {}
-        img.onload = () => resolve(buildGridFromImage(img))
-        img.onerror = () => resolve(null)
-        img.src = url
-      })
+        img.onload = () => {
+          try {
+            const g = buildGridFromImage(img);
+            resolve(g);
+          } catch (e) {
+            console.warn('Mask parse error, falling back to text:', e);
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
     }
 
     // ---------- Render pipeline ----------
@@ -371,9 +411,9 @@
       state.gridRows = +ui.rows.value
       state.cellPx = +ui.cell.value
 
-      ui.colsLab.textContent = state.gridCols
-      ui.rowsLab.textContent = state.gridRows
-      ui.cellLab.textContent = state.cellPx
+      ui.colsLab ? ui.colsLab.textContent = state.gridCols : 0
+      ui.rowsLab ? ui.rowsLab.textContent = state.gridRows : 0
+      ui.cellLab ? ui.cellLab.textContent = state.cellPx : 0
 
       setCanvasSize()
 
@@ -383,7 +423,7 @@
 
       if(srcKind === 'url'){
         grid = await buildGridFromUrl(ui.maskUrl.value.trim())
-        if(!grid){ statusEl.textContent = 'Mask yüklenemedi, metin fallback.'; grid = buildGridFromText(ui.textInput.value) }
+        if(!grid){ statusEl.textContent = 'Mask yüklenemedi, metin görünümüne geçildi.'; grid = buildGridFromText(ui.textInput.value) }
       } else if(srcKind === 'text'){
         grid = buildGridFromText(ui.textInput.value)
       } else if(srcKind === 'upload'){
@@ -432,8 +472,6 @@
         const note = (modal.note.value||'').trim()
         const file = modal.file.files && modal.file.files[0]
         window.__PENDING__ = { tw } // upload path için
-
-        if(!window.claimSelectedCell){ statusEl.textContent = 'Firestore bağlantısı yok.'; return }
         await window.claimSelectedCell({ x: state.selected.x, y: state.selected.y, tw, note, file })
         closeModal()
         statusEl.textContent = 'Hücre yerleştirildi.'
@@ -472,14 +510,11 @@
         const cx = x*cell + cell/2, cy = y*cell + cell/2
         const r = Math.max(2, cell*0.44)
         if(meta.imageUrl){
-          const img = getImg(meta.imageUrl)
-          if(img && img.complete && img.naturalWidth){
-            o.save(); o.beginPath(); o.arc(cx, cy, r, 0, Math.PI*2); o.clip();
-            o.drawImage(img, cx-r, cy-r, r*2, r*2); o.restore();
-            o.strokeStyle = 'rgba(255,255,255,0.7)'; o.lineWidth = 1; o.beginPath(); o.arc(cx,cy,r-0.5,0,Math.PI*2); o.stroke();
-          } else {
-            o.fillStyle = '#fff'; o.beginPath(); o.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); o.fill();
-          }
+          const img = new Image(); img.crossOrigin='anonymous'; img.src = meta.imageUrl;
+          img.onload = () => { /* no-op, export basit */ }
+          o.save(); o.beginPath(); o.arc(cx, cy, r, 0, Math.PI*2); o.clip();
+          o.drawImage(img, cx-r, cy-r, r*2, r*2); o.restore();
+          o.strokeStyle = 'rgba(255,255,255,0.7)'; o.lineWidth = 1; o.beginPath(); o.arc(cx,cy,r-0.5,0,Math.PI*2); o.stroke();
         } else {
           o.fillStyle = '#fff'; o.beginPath(); o.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); o.fill();
         }
@@ -502,9 +537,9 @@
     ui.fontPx.addEventListener('input', () => { ui.fontPxVal.textContent = ui.fontPx.value; render() })
     ui.thr.addEventListener('input', () => { ui.thrVal.textContent = ui.thr.value; render() })
     ui.darkIsLogo.addEventListener('change', render)
-    ui.cols.addEventListener('input', () => { ui.colsLab.textContent = ui.cols.value; render() })
-    ui.rows.addEventListener('input', () => { ui.rowsLab.textContent = ui.rows.value; render() })
-    ui.cell.addEventListener('input', () => { ui.cellLab.textContent = ui.cell.value; render() })
+    ui.cols.addEventListener('input', () => { render() })
+    ui.rows.addEventListener('input', () => { render() })
+    ui.cell.addEventListener('input', () => { render() })
     ui.maskUrl.addEventListener('change', render)
     ui.textInput.addEventListener('input', render)
     ui.fileGlobal.addEventListener('change', render)
