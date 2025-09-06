@@ -2,559 +2,334 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Sentient Mosaic</title>
   <style>
-    :root{--bg:#000;--panel:#0f1115;--ring:#222531;--muted:#9aa3a9;--text:#e5e7eb;--accent:#6366f1;--logo:#0ea5e9}
+    :root{
+      --bg:#0a0a0a; --panel:#111318; --text:#e5e7eb; --muted:#9aa0a6; --accent:#6366f1; --logo:#0ea5e9;
+      --ring:rgba(255,255,255,.75);
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;display:flex;flex-direction:column;align-items:center;gap:10px}
-    .wrap{width:min(1200px,95vw)}
-    .toolbar{background:var(--panel);border:1px solid var(--ring);border-radius:12px;padding:12px;display:grid;gap:10px}
-    .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-    .toolbar input[type="text"],.toolbar input[type="url"]{background:#0b0d12;color:var(--text);border:1px solid var(--ring);border-radius:8px;padding:8px 10px;min-width:200px}
+    body{
+      margin:0;background:#000;color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+      display:flex;flex-direction:column;align-items:center;gap:10px;padding-bottom:24px;
+    }
+    .toolbar{
+      width:min(1200px,95vw);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+      padding:10px;margin-top:10px;background:var(--panel);border:1px solid #1f2430;border-radius:12px;
+    }
+    .toolbar input[type="text"]{background:#0f1115;color:var(--text);border:1px solid #242a36;border-radius:8px;padding:8px 10px;min-width:160px}
     .toolbar input[type="file"]{color:var(--muted)}
-    .toolbar label{font-size:12px;color:var(--muted)}
-    .btn{background:#1b1f2b;color:var(--text);border:1px solid var(--ring);border-radius:10px;padding:8px 12px;cursor:pointer}
-    .btn.primary{background:#5046e4;color:#fff;border:none}
-    .hint{color:var(--muted);font-size:12px;margin-top:-4px}
-    .stage{background:#0b0b0b;border:1px dashed #2a2f3b;border-radius:12px;padding:10px;display:flex;justify-content:center;align-items:center;margin:6px 0}
+    .toolbar button{background:#5046e4;border:none;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+    .toolbar .ghost{background:#1b1e27;color:var(--text)}
+    .hint{color:var(--muted);font-size:12px;text-align:center;margin-top:-2px}
+    .stage{width:min(1200px,95vw);background:#0b0b0b;border:1px dashed #2a2f3b;border-radius:12px;padding:8px;
+      display:flex;justify-content:center;align-items:center}
     canvas{display:block;background:#000;border-radius:10px}
-    .legend{color:var(--muted);font-size:12px;text-align:center}
+    .legend{color:var(--muted);font-size:12px;text-align:center;margin-top:-6px}
     .status{font-size:12px;color:#fca5a5;text-align:center;min-height:18px}
-
-    /* Modal */
-    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:50}
-    .modal.show{display:flex}
-    .card{width:min(440px,92vw);background:#0f1115;border:1px solid #23283a;border-radius:14px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
-    .card h3{margin:0 0 8px;font-size:18px}
-    .card .desc{color:#9aa0a6;font-size:12px;margin-bottom:10px}
-    .card label{display:block;font-size:12px;color:#b8c0cc;margin:10px 0 6px}
-    .card input[type="text"], .card input[type="file"]{width:100%;background:#0b0d12;color:#e5e7eb;border:1px solid #242a36;border-radius:8px;padding:8px 10px}
-    .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+    .dlg-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:10}
+    .dlg{width:min(520px,92vw);background:#0f1115;border:1px solid #2a3245;border-radius:12px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.55)}
+    .dlg h3{margin:0 0 8px 0;font-size:16px}
+    .row{display:flex;gap:8px;margin:8px 0}
+    .row input[type="text"], .row input[type="file"]{flex:1;background:#0b0d12;border:1px solid #263044;border-radius:8px;color:var(--text);padding:8px}
+    .dlg .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+    .ok{background:#5046e4;color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .cancel{background:#1b1e27;color:#e5e7eb;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .good{color:#34d399}
   </style>
 
-  <!-- Firebase (modüler SDK) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, writeBatch, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
-    import { getStorage, ref as sref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js";
-
-    // --- Firebase config ---
-    // Not: API key hatası olursa bu blok, anahtarı hızlıca girebilmen için prompt açar ve
-    // localStorage'a kaydeder. Böylece dosyayı tekrar düzenlemen gerekmez.
-    const DEFAULT_FB = {
-      apiKey: "AIzaSyCSwMcRcmX1FyS3D1EJ3J8Bk1Ky3_Fb30E",  // Gerekirse prompt ile üzerine yazılacak
-      authDomain: "sentient-mosaic.firebaseapp.com",
-      projectId: "sentient-mosaic",
-      storageBucket: "sentient-mosaic.appspot.com",
-      messagingSenderId: "270660218350",
-      appId: "1:270660218350:web:4882d74709e8bfcbbf72ff",
-      measurementId: "G-52B6Y2M6TP"
-    };
-    const SAVED = (()=>{ try{ return JSON.parse(localStorage.getItem("SM_FB_CFG")||"null"); }catch{ return null }})();
-    const firebaseConfig = SAVED ? { ...DEFAULT_FB, ...SAVED } : DEFAULT_FB;
-
-    let app, db, auth, storage;
-    let FB_READY = false;
-
-    async function initFirebase(){
-      try{
-        app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        storage = getStorage(app);
-        await signInAnonymously(auth);
-        FB_READY = true;
-        window.__FB__ = { app, db, auth, storage };
-        console.log("Firebase ready");
-      }catch(e){
-        console.warn("Firebase init/signIn error:", e?.code || e?.message || e);
-        FB_READY = false;
-        window.__FB__ = undefined;
-        const needsKey = (e?.code || e?.message || "").toString().includes("api-key");
-        const msg = needsKey
-          ? "Firebase API key geçersiz. Lütfen Web API Key değerini girin."
-          : "Firestore bağlantısı yok.";
-        document.querySelector("#status").textContent = msg;
-
-        // Hızlı çözüm: API key sor → kaydet → sayfayı yenile
-        if(needsKey){
-          const k = prompt("Firebase Web API Key (Project settings ▸ General sayfasındaki değer):", "");
-          if(k && k.trim()){
-            const next = { ...firebaseConfig, apiKey: k.trim() };
-            localStorage.setItem("SM_FB_CFG", JSON.stringify(next));
-            location.reload();
-          }
-        }
-      }
-    }
-    await initFirebase();
-
-    // settings/config (opsiyonel)
-    window.loadRemoteConfig = async () => {
-      if(!FB_READY) return;
-      try {
-        const snap = await getDoc(doc(db, "settings", "config"));
-        if (snap.exists()) {
-          window.SENTIENT_CFG = { ...(window.SENTIENT_CFG || {}), ...snap.data() };
-        }
-      } catch (e) { console.warn("config okunamadı:", e); }
-    };
-
-    // Realtime placements
-    window.subscribePlacements = () => {
-      if(!FB_READY) return () => {};
-      const colRef = collection(db, "placements");
-      return onSnapshot(colRef, (qs) => {
-        if (!window.__STATE__?.placements) return;
-        window.__STATE__.placements.clear();
-        qs.forEach(d => {
-          const m = d.data();
-          window.__STATE__.placements.set(`${m.x},${m.y}`, m);
-        });
-        if (window.__DRAW__) window.__DRAW__();
-      });
-    };
-
-    // Görseli Storage'a yükle → URL döndür (orijinal uzantıyı koru)
-    async function uploadPlacementImage({ x, y, uid, file }) {
-      if (!FB_READY || !file) return null;
-      const ext = (file.type || "").includes("png") ? "png"
-                : (file.type || "").includes("jpeg") ? "jpg"
-                : (file.type || "").includes("webp") ? "webp"
-                : "bin";
-      const safeHandle = (window.__PENDING__?.tw || "").replace(/[^a-zA-Z0-9_.\-@]/g, "").slice(0, 32) || "user";
-      const path = `placements/${x}_${y}/${uid}-${Date.now()}-${safeHandle}.${ext}`;
-      const ref = sref(storage, path);
-      await uploadBytes(ref, file);
-      return await getDownloadURL(ref);
-    }
-
-    // Hücre claim (tek hak) + imageUrl kaydı
-    window.claimSelectedCell = async ({ x, y, tw = "", note = "", file }) => {
-      if(!FB_READY) throw new Error("Firestore bağlantısı yok.");
-      const user = auth.currentUser;
-      if (!user) throw new Error("Anonymous auth yok.");
-
-      const imageUrl = await uploadPlacementImage({ x, y, uid: user.uid, file }).catch(() => null);
-
-      const batch = writeBatch(db);
-      const cellId = `${x}_${y}`;
-      const placeRef = doc(db, "placements", cellId);
-      const claimRef = doc(db, "claims", user.uid);
-
-      const payload = { x, y, tw, note, uid: user.uid, ts: Date.now() };
-      if (imageUrl) payload.imageUrl = imageUrl;
-
-      batch.set(placeRef, payload, { merge: false });
-      batch.set(claimRef, { placed: true, x, y, ts: Date.now() }, { merge: false });
-      await batch.commit();
-    };
-  </script>
+  <!-- Firebase compat SDK'leri -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.1/firebase-storage-compat.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <div class="toolbar">
-      <div class="row">
-        <label><input type="radio" name="src" value="url" checked> Mask URL</label>
-        <label><input type="radio" name="src" value="text"> Metin</label>
-        <label><input type="radio" name="src" value="upload"> Görsel yükle</label>
-        <span style="flex:1"></span>
-        <label><input id="darkIsLogo" type="checkbox" checked> Koyu piksel = logo</label>
-        <label> Eşik <input id="thr" type="range" min="0" max="255" value="100"> <span id="thrVal">100</span></label>
-      </div>
-      <div class="row" id="rowUrl">
-        <label>Mask URL</label>
-        <input id="maskUrl" type="url" value="mask.png" placeholder="mask.png veya https://..." />
-        <button id="btnRender" class="btn primary">Yeniden oluştur</button>
-        <button id="btnDownload" class="btn">PNG indir</button>
-      </div>
-      <div class="row" id="rowText" style="display:none">
-        <label>Metin</label>
-        <input id="textInput" type="text" value="SENTIENT" />
-        <label>Yazı boyutu <input id="fontPx" type="range" min="24" max="240" value="160"> <span id="fontPxVal">160</span> px</label>
-      </div>
-      <div class="row" id="rowUpload" style="display:none">
-        <input id="fileGlobal" type="file" accept="image/png,image/jpeg,image/webp" />
-      </div>
-      <div class="row">
-        <label>Izgara: <span id="colsLab">40</span>x<span id="rowsLab">40</span> hücre, hücre <span id="cellLab">16</span> px</label>
-        <input id="cols" type="range" min="16" max="96" value="40">
-        <input id="rows" type="range" min="16" max="96" value="40">
-        <input id="cell" type="range" min="8" max="30" value="16">
-      </div>
-      <div class="hint">Sadece <b>mavi</b> (logo) hücreler tıklanabilir. Harici maskelerde CORS sorunu olursa <b>Metin</b> ya da <b>Görsel yükle</b> kullan.</div>
-    </div>
 
-    <div class="stage">
-      <canvas id="mosaic" aria-label="Sentient Mosaic"></canvas>
-    </div>
-
-    <div id="status" class="status"></div>
-    <div class="legend">Mavi daireler logo piksellerini temsil eder. Hücreye tıklayınca görsel + @handle + not istenir ve kaydedilir.</div>
+  <div class="toolbar">
+    <input id="tw" type="text" placeholder="@twitter (zorunlu)" />
+    <input id="note" type="text" placeholder="Sentient’e notun (max 128)" maxlength="128" style="flex:1;min-width:220px" />
+    <input id="file" type="file" accept="image/png,image/jpeg,image/webp" />
+    <button id="clearSel" class="ghost">Seçimi temizle</button>
+    <button id="placeSel">Seçilen hücreye yerleştir</button>
   </div>
+  <div class="hint">Sadece <b>mavi logo</b> piksellerine tıklayıp yerleştirebilirsin. İlk tık seçer, butonla kaydedersin.</div>
 
-  <!-- Claim modal -->
-  <div id="modal" class="modal" aria-hidden="true">
-    <div class="card">
-      <h3>Hücreyi Sahiplen</h3>
-      <div class="desc">Bu hücre logo alanında. Görselini yükle, @handle ve kısa not ekle.</div>
-      <label>Twitter kullanıcı adı</label>
-      <input id="m_tw" type="text" placeholder="@kullanici" maxlength="32" />
-      <label>Not</label>
-      <input id="m_note" type="text" placeholder="Sentient'e notun (128 karakter)" maxlength="128" />
-      <label>Görsel (PNG/JPG/WebP)</label>
-      <input id="m_file" type="file" accept="image/*" />
+  <div class="stage">
+    <canvas id="mosaic" aria-label="mosaic"></canvas>
+  </div>
+  <div id="status" class="status"></div>
+  <div class="legend">Mavi daireler logo piksellerini temsil eder. (Ayar: <code>settings/config</code>)</div>
+
+  <!-- Mini Dialog -->
+  <div id="dlgBack" class="dlg-back">
+    <div class="dlg">
+      <h3>Hücresi Sahiplen</h3>
+      <div class="row"><input id="dlgTw" type="text" placeholder="@twitter (zorunlu)"></div>
+      <div class="row"><input id="dlgNote" type="text" placeholder="Kısa not (max 128)" maxlength="128"></div>
+      <div class="row"><input id="dlgFile" type="file" accept="image/png,image/jpeg,image/webp"></div>
       <div class="actions">
-        <button id="m_cancel" class="btn">Vazgeç</button>
-        <button id="m_submit" class="btn primary">Kaydet</button>
+        <button id="dlgCancel" class="cancel">Vazgeç</button>
+        <button id="dlgSave" class="ok">Kaydet</button>
       </div>
     </div>
   </div>
 
-  <script>
-  ;(() => {
-    // ------- State & helpers -------
-    const $ = (s) => document.querySelector(s)
-    const $$ = (s) => Array.from(document.querySelectorAll(s))
+<script>
+/* =========================================================
+   0) Firebase init
+   ———————————————————————————————————————————————— */
+const firebaseConfig = {
+  apiKey: "AIzaSyC5wMcRcmXlFy53D1EJ3J8BkIKy3_Fb3OE",
+  authDomain: "sentient-mosaic.firebaseapp.com",
+  projectId: "sentient-mosaic",
+  // ÖNEMLİ: bucket adı -> <project-id>.appspot.com
+  storageBucket: "sentient-mosaic.appspot.com",
+  messagingSenderId: "270660218350",
+  appId: "1:270660218350:web:4882d74709e8bfcbbff27ff",
+  measurementId: "G-52B6Y2M6TP"
+};
 
-    const canvas = $('#mosaic')
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    const statusEl = $('#status')
+firebase.initializeApp(firebaseConfig);
+window.__FB__ = {
+  app: firebase.app(),
+  auth: firebase.auth(),
+  db: firebase.firestore(),
+  st: firebase.storage()
+};
+__FB__.auth.onAuthStateChanged(async u=>{
+  if (!u) await __FB__.auth.signInAnonymously().catch(console.error);
+});
 
-    const ui = {
-      srcRadios: () => $$('input[name="src"]'),
-      maskUrl: $('#maskUrl'),
-      textInput: $('#textInput'),
-      fontPx: $('#fontPx'),
-      fontPxVal: $('#fontPxVal'),
-      fileGlobal: $('#fileGlobal'),
-      thr: $('#thr'), thrVal: $('#thrVal'),
-      darkIsLogo: $('#darkIsLogo'),
-      cols: $('#cols'), rows: $('#rows'), cell: $('#cell'),
-      colsLab: $('#colsLab'), rowsLab: $('#rowsLab'), cellLab: $('#cellLab'),
-      rowUrl: $('#rowUrl'), rowText: $('#rowText'), rowUpload: $('#rowUpload'),
-      btnRender: $('#btnRender'), btnDownload: $('#btnDownload'),
+/* =========================================================
+   1) UI & Canvas & Helpers
+   ———————————————————————————————————————————————— */
+const $ = s => document.querySelector(s);
+const statusEl = $('#status');
+const canvas = $('#mosaic');
+const ctx = canvas.getContext('2d',{ willReadFrequently:true });
+
+const DEFAULT_CFG = {
+  gridCols: 40,
+  gridRows: 40,
+  cellPx: 16,
+  logoMaskUrl: '/mask.png',
+  mosaicOpen: true,
+  maxClaimPerUser: 1
+};
+let cfg = { ...DEFAULT_CFG };
+let maskGrid = null;
+let selected = null;
+const placementsMap = new Map();
+
+function setCanvasSize(){
+  canvas.width  = cfg.gridCols * cfg.cellPx;
+  canvas.height = cfg.gridRows * cfg.cellPx;
+  const maxW = Math.min(window.innerWidth * 0.95, 1100);
+  const scale = Math.min(1, maxW / canvas.width);
+  canvas.style.width  = (canvas.width*scale) + 'px';
+  canvas.style.height = (canvas.height*scale) + 'px';
+}
+setCanvasSize(); addEventListener('resize', setCanvasSize);
+
+function paintBackground(){ ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+
+function imageToGrid(img, rows, cols){
+  const t = document.createElement('canvas');
+  t.width = cols; t.height = rows;
+  const tctx = t.getContext('2d',{ willReadFrequently:true });
+  tctx.imageSmoothingEnabled = false;
+  tctx.drawImage(img,0,0,cols,rows);
+  const data = tctx.getImageData(0,0,cols,rows).data;
+  const grid = new Array(rows).fill(0).map(()=>new Array(cols).fill(false));
+  for (let y=0;y<rows;y++){
+    for (let x=0;x<cols;x++){
+      const i=(y*cols+x)*4; const r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+      const L = 0.2126*r + 0.7152*g + 0.0722*b;
+      const isLogo = (a>40) && (L<100);
+      grid[y][x] = !!isLogo;
     }
+  }
+  return grid;
+}
 
-    const modal = {
-      root: $('#modal'), tw: $('#m_tw'), note: $('#m_note'), file: $('#m_file'),
-      submit: $('#m_submit'), cancel: $('#m_cancel')
-    }
-
-    const state = {
-      gridCols: 40,
-      gridRows: 40,
-      cellPx: 16,
-      grid: null, // boolean[][]
-      placements: new Map(), // key "x,y" -> { x,y, tw, note, imageUrl, uid }
-      selected: null, // {x,y}
-      srcKind: 'url',
-    }
-    window.__STATE__ = state
-
-    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
-
-    function setCanvasSize() {
-      const wCss = state.gridCols * state.cellPx
-      const hCss = state.gridRows * state.cellPx
-      canvas.width = Math.floor(wCss * DPR)
-      canvas.height = Math.floor(hCss * DPR)
-      canvas.style.width = wCss + 'px'
-      canvas.style.height = hCss + 'px'
-      ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
-    }
-
-    function paintBG(){ ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height) }
-
-    // cache for placement avatars
-    const imgCache = new Map()
-    function getImg(url){
-      if(!url) return null
-      if(imgCache.has(url)) return imgCache.get(url)
-      const im = new Image(); im.crossOrigin='anonymous'; im.src=url; imgCache.set(url, im)
-      im.onload = () => drawGrid()
-      return im
-    }
-
-    function drawGrid(){
-      paintBG()
-      const cell = state.cellPx
-      const rows = state.gridRows, cols = state.gridCols
-      const grid = state.grid
-
-      // logo dots
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--logo').trim() || '#0ea5e9'
-      for(let y=0;y<rows;y++){
-        for(let x=0;x<cols;x++){
-          if(!grid || !grid[y][x]) continue
-          const cx = x*cell + cell/2
-          const cy = y*cell + cell/2
-          const r = Math.floor(cell*0.45)
-          ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill()
-        }
-      }
-
-      // grid lines
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1
-      for(let x=0;x<=cols;x++){ ctx.beginPath(); ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,rows*cell); ctx.stroke() }
-      for(let y=0;y<=rows;y++){ ctx.beginPath(); ctx.moveTo(0,y*cell); ctx.lineTo(cols*cell,y*cell); ctx.stroke() }
-
-      // placements overlay
-      for(const [key, meta] of state.placements.entries()){
-        const [x,y] = key.split(',').map(Number)
-        const cx = x*cell + cell/2, cy = y*cell + cell/2
-        const r = Math.max(2, cell*0.44)
-        if(meta.imageUrl){
-          const img = getImg(meta.imageUrl)
-          if(img && img.complete && img.naturalWidth){
-            ctx.save()
-            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip()
-            ctx.drawImage(img, cx-r, cy-r, r*2, r*2)
-            ctx.restore()
-            ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1
-            ctx.beginPath(); ctx.arc(cx, cy, r-0.5, 0, Math.PI*2); ctx.stroke()
-          } else {
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); ctx.fill()
-          }
-        } else {
-          ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); ctx.fill()
-        }
-      }
-
-      // selection outline
-      if(state.selected){
-        const {x,y} = state.selected
-        ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 2
-        ctx.strokeRect(x*cell+1, y*cell+1, cell-2, cell-2)
+function drawGrid(){
+  const cell=cfg.cellPx;
+  paintBackground();
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--logo').trim()||'#0ea5e9';
+  if (maskGrid){
+    for (let y=0;y<cfg.gridRows;y++){
+      for (let x=0;x<cfg.gridCols;x++){
+        if (!maskGrid[y][x]) continue;
+        const cx=x*cell+cell/2, cy=y*cell+cell/2, r=Math.floor(cell*0.45);
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
       }
     }
-    window.__DRAW__ = drawGrid
+  }
+  ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+  for (let x=0; x<=cfg.gridCols; x++){ ctx.beginPath(); ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,canvas.height); ctx.stroke(); }
+  for (let y=0; y<=cfg.gridRows; y++){ ctx.beginPath(); ctx.moveTo(0,y*cell); ctx.lineTo(canvas.width,y*cell); ctx.stroke(); }
 
-    // ---------- Grid builders ----------
-    function boolGrid(rows, cols, fill=false){
-      return Array.from({length: rows}, () => Array(cols).fill(fill))
-    }
-    function sampleToGrid(sampleCanvas, rows, cols){
-      const t = document.createElement('canvas')
-      t.width = cols; t.height = rows
-      const tctx = t.getContext('2d', { willReadFrequently: true })
-      tctx.imageSmoothingEnabled = false
-      tctx.drawImage(sampleCanvas, 0, 0, cols, rows)
+  if (selected){
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+    ctx.strokeRect(selected.x*cell+2, selected.y*cell+2, cell-4, cell-4);
+  }
+  drawPlacements();
+}
 
-      const data = tctx.getImageData(0,0,cols,rows).data
-      const grid = boolGrid(rows, cols, false)
-      const T = +ui.thr.value
-      const darkIsLogo = ui.darkIsLogo.checked
+const imageCache = new Map();
+function drawPlacements(){
+  const cell = cfg.cellPx;
+  const me = __FB__?.auth?.currentUser?.uid;
+  for (const [,p] of placementsMap){
+    const cx = p.x*cell + cell/2;
+    const cy = p.y*cell + cell/2;
+    const r  = Math.floor(cell*0.42);
 
-      for(let y=0;y<rows;y++){
-        for(let x=0;x<cols;x++){
-          const i = (y*cols + x)*4
-          const r = data[i], g=data[i+1], b=data[i+2], a=data[i+3]
-          const L = 0.2126*r + 0.7152*g + 0.0722*b
-          let isLogo
-          if(darkIsLogo){ isLogo = (a>40) && (L <= T) } else { isLogo = (a>40) && (L >= (255 - T)) }
-          grid[y][x] = !!isLogo
-        }
+    if (p.imageUrl){
+      let img = imageCache.get(p.imageUrl);
+      if (!img){
+        img = new Image(); img.crossOrigin='anonymous'; img.src=p.imageUrl;
+        imageCache.set(p.imageUrl,img);
+        img.onload = ()=> drawPlacements();
       }
-      return grid
-    }
-    function buildGridFromText(text){
-      const rows = state.gridRows, cols = state.gridCols
-      const sc = document.createElement('canvas')
-      sc.width = cols*4; sc.height = rows*4
-      const sctx = sc.getContext('2d')
-      sctx.clearRect(0,0,sc.width, sc.height)
-      sctx.fillStyle = '#000'; sctx.fillRect(0,0,sc.width, sc.height)
-      sctx.fillStyle = '#fff'
-      sctx.textBaseline = 'middle'; sctx.textAlign = 'center'
-      const fs = +ui.fontPx.value
-      sctx.font = `800 ${fs}px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial`
-      sctx.fillText(text || 'SENTIENT', sc.width/2, sc.height/2)
-      return sampleToGrid(sc, rows, cols)
-    }
-    function buildGridFromImage(img){
-      const rows = state.gridRows, cols = state.gridCols
-      const sc = document.createElement('canvas')
-      sc.width = img.naturalWidth; sc.height = img.naturalHeight
-      const sctx = sc.getContext('2d')
-      sctx.drawImage(img,0,0)
-      return sampleToGrid(sc, rows, cols)
-    }
-    function buildGridFromUrl(url){
-      return new Promise((resolve) => {
-        const img = new Image();
-        try {
-          const link = document.createElement('a'); link.href = url;
-          const sameOrigin = (link.origin === window.location.origin);
-          if (!sameOrigin) img.crossOrigin = 'anonymous';
-        } catch {}
-        img.onload = () => {
-          try {
-            const g = buildGridFromImage(img);
-            resolve(g);
-          } catch (e) {
-            console.warn('Mask parse error, falling back to text:', e);
-            resolve(null);
-          }
-        };
-        img.onerror = () => resolve(null);
-        img.src = url;
-      });
-    }
-
-    // ---------- Render pipeline ----------
-    async function render(){
-      state.gridCols = +ui.cols.value
-      state.gridRows = +ui.rows.value
-      state.cellPx = +ui.cell.value
-
-      ui.colsLab ? ui.colsLab.textContent = state.gridCols : 0
-      ui.rowsLab ? ui.rowsLab.textContent = state.gridRows : 0
-      ui.cellLab ? ui.cellLab.textContent = state.cellPx : 0
-
-      setCanvasSize()
-
-      let grid = null
-      const srcKind = state.srcKind
-      statusEl.textContent = ''
-
-      if(srcKind === 'url'){
-        grid = await buildGridFromUrl(ui.maskUrl.value.trim())
-        if(!grid){ statusEl.textContent = 'Mask yüklenemedi, metin görünümüne geçildi.'; grid = buildGridFromText(ui.textInput.value) }
-      } else if(srcKind === 'text'){
-        grid = buildGridFromText(ui.textInput.value)
-      } else if(srcKind === 'upload'){
-        const f = ui.fileGlobal.files && ui.fileGlobal.files[0]
-        if(!f){ statusEl.textContent = 'Bir görsel seçmelisin.'; grid = buildGridFromText(ui.textInput.value) }
-        else {
-          const url = URL.createObjectURL(f)
-          const img = new Image()
-          await new Promise((res)=>{ img.onload = () => res(); img.onerror = () => res(); img.src = url })
-          URL.revokeObjectURL(url)
-          grid = img.complete && img.naturalWidth ? buildGridFromImage(img) : buildGridFromText(ui.textInput.value)
-        }
+      if (img.complete){
+        ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+        ctx.drawImage(img, cx-r, cy-r, r*2, r*2); ctx.restore();
       }
-
-      state.grid = grid || boolGrid(state.gridRows, state.gridCols, false)
-      drawGrid()
+    }else{
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(cx,cy,Math.max(2,Math.floor(cell*0.12)),0,Math.PI*2); ctx.fill();
     }
 
-    // ---------- Selection & claim flow ----------
-    function pixelToCell(ev){
-      const rect = canvas.getBoundingClientRect()
-      const x = ev.clientX - rect.left
-      const y = ev.clientY - rect.top
-      const sx = Math.floor(x / (rect.width / state.gridCols))
-      const sy = Math.floor(y / (rect.height / state.gridRows))
-      return {x: Math.max(0, Math.min(state.gridCols-1, sx)), y: Math.max(0, Math.min(state.gridRows-1, sy))}
-    }
-    function openModal(){ modal.root.classList.add('show'); modal.root.setAttribute('aria-hidden','false') }
-    function closeModal(){ modal.root.classList.remove('show'); modal.root.setAttribute('aria-hidden','true'); modal.tw.value=''; modal.note.value=''; modal.file.value='' }
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.lineWidth = (p.uid===me) ? 3 : 1.5;
+    ctx.strokeStyle = (p.uid===me) ? '#fff' : 'rgba(255,255,255,.6)';
+    ctx.stroke();
+  }
+}
 
-    canvas.addEventListener('click', (ev) => {
-      const {x,y} = pixelToCell(ev)
-      if(!state.grid || !state.grid[y]?.[x]){ statusEl.textContent = 'Bu hücre logo alanında değil.'; return }
-      const key = x+','+y
-      if(state.placements.has(key)){ statusEl.textContent = 'Bu hücre zaten dolu.'; return }
-      state.selected = {x,y}
-      drawGrid()
-      openModal()
-    })
+/* =========================================================
+   2) Config + Mask + Firestore stream
+   ———————————————————————————————————————————————— */
+async function loadConfig(){
+  try{
+    const db = __FB__.db;
+    const snap = await db.collection('settings').doc('config').get();
+    if (snap.exists) Object.assign(cfg, snap.data());
+  }catch(e){ console.warn('Firestore config okunamadı, varsayılan kullanılıyor.', e); }
+}
+async function loadAndRenderMask(){
+  statusEl.textContent='';
+  const img=new Image(); img.crossOrigin='anonymous';
+  return new Promise(res=>{
+    img.onload = ()=>{ maskGrid = imageToGrid(img,cfg.gridRows,cfg.gridCols); drawGrid(); res(true); };
+    img.onerror = ()=>{ statusEl.textContent='Mask yüklenemedi: '+cfg.logoMaskUrl; drawGrid(); res(false); };
+    img.src = cfg.logoMaskUrl || '/mask.png';
+  });
+}
+function startPlacementsStream(){
+  const db = __FB__.db;
+  db.collection('placements').onSnapshot(s=>{
+    placementsMap.clear();
+    s.forEach(doc=> placementsMap.set(doc.id, doc.data()));
+    drawGrid();
+  });
+}
 
-    modal.cancel.addEventListener('click', () => { closeModal() })
-    modal.submit.addEventListener('click', async () => {
-      try{
-        if(!state.selected){ statusEl.textContent='Seçim yok.'; return }
-        const tw = (modal.tw.value||'').trim()
-        const note = (modal.note.value||'').trim()
-        const file = modal.file.files && modal.file.files[0]
-        window.__PENDING__ = { tw } // upload path için
-        await window.claimSelectedCell({ x: state.selected.x, y: state.selected.y, tw, note, file })
-        closeModal()
-        statusEl.textContent = 'Hücre yerleştirildi.'
-      }catch(e){ statusEl.textContent = 'Yerleştirme hatası: ' + (e?.message||e) }
-    })
+/* =========================================================
+   3) Seçim & Dialog & Kaydetme
+   ———————————————————————————————————————————————— */
+const canvasClick = (ev)=>{
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.floor((ev.clientX - rect.left) * scaleX / cfg.cellPx);
+  const y = Math.floor((ev.clientY - rect.top)  * scaleY / cfg.cellPx);
+  if (x<0||y<0||x>=cfg.gridCols||y>=cfg.gridRows) return;
+  if (!maskGrid || !maskGrid[y][x]) { statusEl.textContent='Bu hücre logo alanı değil.'; return; }
+  selected = {x,y}; drawGrid(); statusEl.textContent=`Seçildi: (${x}, ${y})`;
+};
+canvas.addEventListener('click', canvasClick);
 
-    // ---------- Export ----------
-    $('#btnDownload').addEventListener('click', () => {
-      const exportScale = 2
-      const out = document.createElement('canvas')
-      out.width = canvas.width * exportScale / DPR
-      out.height = canvas.height * exportScale / DPR
-      const o = out.getContext('2d')
-      o.scale(exportScale, exportScale)
+$('#clearSel').onclick = ()=>{ selected=null; drawGrid(); statusEl.textContent='Seçim temizlendi.'; };
 
-      o.fillStyle = '#000'; o.fillRect(0,0,out.width,out.height)
-      const cell = state.cellPx
-      // logo dots
-      o.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--logo').trim() || '#0ea5e9'
-      for(let y=0;y<state.gridRows;y++){
-        for(let x=0;x<state.gridCols;x++){
-          if(!state.grid || !state.grid[y][x]) continue
-          const cx = x*cell + cell/2
-          const cy = y*cell + cell/2
-          const r = Math.floor(cell*0.45)
-          o.beginPath(); o.arc(cx,cy,r,0,Math.PI*2); o.fill()
-        }
-      }
-      // grid lines
-      o.strokeStyle = 'rgba(255,255,255,0.06)'; o.lineWidth = 1
-      for(let x=0;x<=state.gridCols;x++){ o.beginPath(); o.moveTo(x*cell,0); o.lineTo(x*cell,state.gridRows*cell); o.stroke() }
-      for(let y=0;y<=state.gridRows;y++){ o.beginPath(); o.moveTo(0,y*cell); o.lineTo(state.gridCols*cell,y*cell); o.stroke() }
-      // placements
-      for(const [key, meta] of state.placements.entries()){
-        const [x,y] = key.split(',').map(Number)
-        const cx = x*cell + cell/2, cy = y*cell + cell/2
-        const r = Math.max(2, cell*0.44)
-        if(meta.imageUrl){
-          const img = new Image(); img.crossOrigin='anonymous'; img.src = meta.imageUrl;
-          img.onload = () => { /* no-op, export basit */ }
-          o.save(); o.beginPath(); o.arc(cx, cy, r, 0, Math.PI*2); o.clip();
-          o.drawImage(img, cx-r, cy-r, r*2, r*2); o.restore();
-          o.strokeStyle = 'rgba(255,255,255,0.7)'; o.lineWidth = 1; o.beginPath(); o.arc(cx,cy,r-0.5,0,Math.PI*2); o.stroke();
-        } else {
-          o.fillStyle = '#fff'; o.beginPath(); o.arc(cx,cy,Math.max(2, cell*0.18),0,Math.PI*2); o.fill();
-        }
-      }
+$('#placeSel').onclick = ()=> openDlg();
 
-      const a = document.createElement('a')
-      a.download = 'sentient-mosaic.png'
-      a.href = out.toDataURL('image/png')
-      a.click()
-    })
+function openDlg(){
+  if (!selected){ statusEl.textContent='Önce mozaikte bir logo hücresi seç.'; return; }
+  $('#dlgTw').value = $('#tw').value || '';
+  $('#dlgNote').value = $('#note').value || '';
+  $('#dlgFile').value = '';
+  $('#dlgBack').style.display='flex';
+}
+$('#dlgCancel').onclick = ()=> $('#dlgBack').style.display='none';
+$('#dlgSave').onclick   = async ()=>{
+  $('#tw').value  = $('#dlgTw').value.trim();
+  $('#note').value= $('#dlgNote').value.trim();
+  const f = $('#dlgFile').files[0];
+  if (f){ const mainFile=$('#file'); const dt=new DataTransfer(); dt.items.add(f); mainFile.files = dt.files; }
+  $('#dlgBack').style.display='none';
+  await placeSelected();
+};
 
-    // ---------- UI wiring ----------
-    function setSrc(kind){
-      state.srcKind = kind
-      ui.rowUrl.style.display = kind==='url' ? '' : 'none'
-      ui.rowText.style.display = kind==='text' ? '' : 'none'
-      ui.rowUpload.style.display = kind==='upload' ? '' : 'none'
-    }
-    ui.srcRadios().forEach(r => r.addEventListener('change', (e) => setSrc(e.target.value)))
-    ui.fontPx.addEventListener('input', () => { ui.fontPxVal.textContent = ui.fontPx.value; render() })
-    ui.thr.addEventListener('input', () => { ui.thrVal.textContent = ui.thr.value; render() })
-    ui.darkIsLogo.addEventListener('change', render)
-    ui.cols.addEventListener('input', () => { render() })
-    ui.rows.addEventListener('input', () => { render() })
-    ui.cell.addEventListener('input', () => { render() })
-    ui.maskUrl.addEventListener('change', render)
-    ui.textInput.addEventListener('input', render)
-    ui.fileGlobal.addEventListener('change', render)
-    $('#btnRender').addEventListener('click', render)
-    window.addEventListener('resize', () => { setCanvasSize(); drawGrid() })
+async function placeSelected(){
+  try{
+    if (!selected) return;
+    if (!cfg.mosaicOpen){ statusEl.textContent='Mosaic kapalı.'; return; }
+    const tw = $('#tw').value.trim();
+    const note = $('#note').value.trim();
+    if (!tw || !tw.startsWith('@')){ statusEl.textContent='@twitter zorunlu.'; return; }
 
-    // init
-    setSrc('url')
-    setCanvasSize()
-    render()
-    ;(async () => {
-      if (window.loadRemoteConfig) await window.loadRemoteConfig();
-      if (window.subscribePlacements) window.subscribePlacements();
-    })()
-  })()
-  </script>
+    const {x,y} = selected;
+    const uid = __FB__.auth.currentUser?.uid;
+    if (!uid){ await __FB__.auth.signInAnonymously(); }
+
+    const db=__FB__.db;
+    const docId = `${x}_${y}`;
+    const now = Date.now();
+
+    await db.collection('placements').doc(docId).set({
+      x, y, tw, note, uid: __FB__.auth.currentUser.uid, ts: now
+    });
+
+    await db.collection('claims').doc(__FB__.auth.currentUser.uid).set({
+      placed:true, x, y, ts: now
+    });
+
+    statusEl.textContent = `Yerleştirildi: (${x}, ${y}) — görsel yükleniyor...`;
+    await uploadPlacementImageAndPatch({x,y});
+    statusEl.innerHTML = `<span class="good">Tamamlandı</span> — (${x}, ${y})`;
+
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = err?.message || String(err);
+  }
+}
+
+async function uploadPlacementImageAndPatch({x,y}){
+  const file = $('#file')?.files?.[0];
+  if (!file) return;
+  const uid = __FB__.auth.currentUser.uid;
+  const path = `placements/${x}_${y}/${uid}-${Date.now()}-${file.name}`;
+  const ref  = __FB__.st.ref(path);
+  await ref.put(file, { contentType:file.type });
+  const url = await ref.getDownloadURL();
+  await __FB__.db.collection('placements').doc(`${x}_${y}`).update({ imageUrl:url });
+}
+
+/* =========================================================
+   4) Başlat
+   ———————————————————————————————————————————————— */
+(async function init(){
+  await loadConfig();
+  setCanvasSize();
+  await loadAndRenderMask();
+  startPlacementsStream();
+  if (!__FB__?.auth?.currentUser) await __FB__.auth.signInAnonymously().catch(()=>{});
+})();
+</script>
 </body>
 </html>
